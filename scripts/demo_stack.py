@@ -2,14 +2,13 @@
 
 Training runs finish in about a minute and deployments answer instantly, so every page can be exercised without waiting for models.
 
-  backend/.venv/bin/python scripts/demo_stack.py            # API on :8000, writes demo logins to demo-logins.txt (gitignored)
+  backend/.venv/bin/python scripts/demo_stack.py            # API on :8000, writes the demo logins to demo-logins.txt (committed)
   cd frontend && npm run dev                                 # UI on :5173
 """
 from __future__ import annotations
 
 import asyncio
 import os
-import secrets
 import sys
 import tempfile
 from pathlib import Path
@@ -51,7 +50,7 @@ async def serve() -> None:
     logins = {}
 
     async def make_user(name: str) -> httpx.AsyncClient:
-        pw = secrets.token_urlsafe(14)
+        pw = f"demo-{name}-pass"  # fixed, so the committed demo-logins.txt stays valid; these accounts exist only in this throwaway demo
         c = httpx.AsyncClient(base_url=url, timeout=30)
         r = await c.post("/auth/signup", json={"email": f"{name}@demo.test", "password": pw, "display_name": name.title()})
         assert r.status_code == 201, r.text
@@ -83,7 +82,6 @@ async def serve() -> None:
         s.commit()
     out = ROOT / "demo-logins.txt"
     out.write_text("\n".join(f"{k} {v}" for k, v in logins.items()) + "\n")
-    out.chmod(0o600)
     print(f"demo API on {url}; logins in {out}; ctrl-c to stop", flush=True)
     await task
 

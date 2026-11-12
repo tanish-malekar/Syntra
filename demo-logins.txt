@@ -1,0 +1,3 @@
+maya@demo.test demo-maya-pass
+acme@demo.test demo-acme-pass
+alice@demo.test demo-alice-pass

@@ -64,7 +64,7 @@ PYTHONPATH=agent backend/.venv/bin/python scripts/demo_stack.py     # API on :80
 cd frontend && npm run dev                                          # UI on http://localhost:5173
 ```
 
-Sign in with a demo account from `demo-logins.txt` (written by the first start, gitignored):
+Sign in with a demo account from `demo-logins.txt` (committed; the demo uses fixed throwaway passwords on a temporary database):
 `alice@demo.test` trains, deploys and compares; `maya@demo.test` and `acme@demo.test` are providers (Provide GPUs, earnings).
 Training runs finish in about a minute and deployments answer instantly. Stop with ctrl-c.
 
