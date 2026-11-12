@@ -92,7 +92,7 @@ Things we decided to do later, parked ideas, and known open issues. Newest chang
 - [x] Model files reach agents on other machines (token-authenticated, lease-scoped, sha256-checked).
 - [x] Verified on real GPUs: full real run on one Mac (train, kill+recover 8.2 s, deploy, compare, evaluate 48/48 vs 0/48, serving fail-over 8.3 s
       with an identical answer) and the two-machine run (Mac + context3 RTX A6000s, replacement across machines, both providers paid).
-- [ ] Cross-machine recovery is slow: 250 s through the SSH tunnel (vs about 8 s on one machine). Likely request timeouts/retries on tunnelled links; not investigated.
+- [x] Cross-machine recovery was slow (250 s): root cause was `nvidia-smi` on context3 blocking ~110 s in the kernel right after a CUDA worker is SIGKILLed; the agent's heartbeat waited on it, so the platform declared the healthy worker dead. Fixed: heartbeats no longer wait for the probe (`Agent.detect_now`), start_worker refuses a GPU it cannot check. Two-machine recovery now 13-14 s, also when the stall occurs.
 - [ ] Admin screen for verifying providers / editing class prices (API exists, no UI).
 - [ ] Provider payouts, real money, email verification and password reset (none built; amounts are simulated).
 - [ ] Production hardening: HTTPS/cookie secure flag, rate limits beyond login, quotas per user, audit log, Postgres instead of SQLite.

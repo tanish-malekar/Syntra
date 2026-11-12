@@ -132,3 +132,34 @@ def test_explicit_model_path_wins_and_port_range_is_used(tmp_path):
             await m.start(spec("p3"))
         await m.stop_all()
     asyncio.run(scenario())
+
+
+def test_hanging_driver_does_not_block_the_agent():
+    """nvidia-smi can hang for minutes after a CUDA process is killed: detect_now must give up waiting, not the heartbeat."""
+    import asyncio
+    import threading
+    import time as _t
+    from syntra_agent.client import Agent, AgentSettings
+    from syntra_agent.hardware import GpuInfo
+    from syntra_agent.workers import AgentConfig
+
+    release = threading.Event()
+    calls = []
+
+    def detector():
+        calls.append(1)
+        if len(calls) == 2:
+            release.wait(30)  # the second probe hangs
+        return [GpuInfo(index=0, name="g", device="cuda", total_memory_mb=1000, free_memory_mb=900)]
+
+    async def run():
+        agent = Agent(AgentSettings(server="http://x", token="t"), AgentConfig(bloombee_dir=".", python="python"), detector=detector)
+        assert await agent.detect_now(1) is not None
+        t = _t.monotonic()
+        assert await agent.detect_now(0.3) is None  # hung probe
+        assert _t.monotonic() - t < 1
+        assert await agent.detect_now(0.2) is None and len(calls) == 2  # still one probe in flight, no pile-up
+        release.set()
+        assert await agent.detect_now(2) is not None  # the slow probe's result is picked up
+
+    asyncio.run(run())

@@ -47,6 +47,7 @@ class Agent:
         self._http: Optional[httpx.AsyncClient] = None
         self._stop = asyncio.Event()
         self.connected = asyncio.Event()
+        self._detect_task: Optional[asyncio.Future] = None
 
     # ---- hardware ---------------------------------------------------------------------------------
     def detect(self) -> list[GpuInfo]:
@@ -55,6 +56,24 @@ class Agent:
         if self.s.gpu_allowlist is not None:
             gpus = [g for g in gpus if g.index in self.s.gpu_allowlist]
         return gpus
+
+    async def detect_now(self, max_wait: float) -> Optional[list[GpuInfo]]:
+        """The current hardware state, or None if the driver does not answer within max_wait.
+
+        nvidia-smi can block for minutes in the kernel (uninterruptibly, so even its timeout does not fire) right after a CUDA
+        process is SIGKILLed. One probe runs at a time; a slow probe is not abandoned, a later call picks up its result.
+        Heartbeats must not wait for it: a silent agent makes the platform declare its healthy workers dead.
+        """
+        if self._detect_task is None or self._detect_task.done():
+            self._detect_task = asyncio.ensure_future(asyncio.to_thread(self.detect))
+        done, _ = await asyncio.wait({self._detect_task}, timeout=max_wait)
+        if not done:
+            return None
+        try:
+            return self._detect_task.result()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("hardware probe failed: %s", exc)
+            return None
 
     # ---- registration + heartbeat -----------------------------------------------------------------
     async def register(self) -> None:
@@ -82,7 +101,11 @@ class Agent:
 
     async def heartbeat_once(self) -> None:
         assert self._http is not None
-        for gpu in await asyncio.to_thread(self.detect):
+        gpus = await self.detect_now(self.s.heartbeat_interval * 2)
+        if gpus is None:  # driver not answering: keep heartbeating with the last known state
+            log.warning("GPU driver not answering; heartbeating with the last known state")
+            gpus = list(self.last.values())
+        for gpu in gpus:
             self.last[gpu.index] = gpu
             gid = self.gpu_ids.get(gpu.index)
             if gid is None:
@@ -120,7 +143,10 @@ class Agent:
                 gpu = self.last.get(spec.device_index)
                 if gpu is None:
                     return {"ok": False, "error": f"unknown GPU index {spec.device_index}"}
-                fresh = {g.index: g for g in await asyncio.to_thread(self.detect)}.get(spec.device_index, gpu)
+                probed = await self.detect_now(20.0)
+                if probed is None:  # never start on a GPU whose state cannot be checked
+                    return {"ok": False, "error": f"GPU {spec.device_index}: the driver is not answering, try another GPU"}
+                fresh = {g.index: g for g in probed}.get(spec.device_index, gpu)
                 if fresh.busy_external:  # never start on a GPU somebody else is using
                     return {"ok": False, "error": f"GPU {spec.device_index} is busy: {fresh.busy_detail}"}
                 fetch = cmd.get("fetch")
