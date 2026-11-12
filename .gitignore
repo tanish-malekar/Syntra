@@ -11,3 +11,7 @@ backend/.venv/
 backend/data/
 backend/.env.dev
 *.db
+
+frontend/node_modules/
+frontend/dist/
+demo-logins.txt
