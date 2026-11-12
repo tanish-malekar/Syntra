@@ -73,6 +73,7 @@ class JobRun:
     down_at: dict = field(default_factory=dict)  # layer_start -> monotonic time the stage lost its worker
     replacement_leases: set = field(default_factory=set)
     handled_down: set = field(default_factory=set)  # lease ids already reported down
+    online_leases: set = field(default_factory=set)  # lease ids whose worker was reported online (an agent re-sends after reconnecting)
     pending: list = field(default_factory=list)  # leases still waiting for a replacement GPU
     result: dict = field(default_factory=dict)  # train.finished payload
     results: dict = field(default_factory=dict)  # serve results by request id
@@ -374,6 +375,9 @@ class Orchestrator:
                 await self._handle_down(run, lease_id, reason)
 
     async def _on_worker_online(self, run: JobRun, lease_id: int, msg: dict) -> None:
+        if lease_id in run.online_leases:
+            return
+        run.online_leases.add(lease_id)
         lease, gpu = await self._db(lambda s: (s.get(Lease, lease_id), s.get(Gpu, s.get(Lease, lease_id).gpu_id)))
         payload = {"layer_start": lease.layer_start, "layer_end": lease.layer_end, "peer_id": msg.get("peer_id", "")}
         if lease_id in run.replacement_leases:

@@ -116,7 +116,8 @@ def main():
     spawn([py, "-m", "uvicorn", "app.main:app", "--port", str(BACKEND_PORT), "--log-level", "warning"], env=env, out=open(work / "backend.log", "w"), cwd=str(ROOT / "backend"))
     url = f"http://127.0.0.1:{BACKEND_PORT}"
     wait(lambda: httpx.get(f"{url}/health", timeout=2).status_code == 200, 40, "backend up")
-    wait(lambda: httpx.get(f"{PUBLIC_URL}/health", timeout=10).status_code == 200, 60, "the public address reaches the backend")
+    if os.environ.get("SKIP_PUBLIC_CHECK") != "1":  # set it when this machine's own DNS cannot resolve the tunnel name (the other Mac still can)
+        wait(lambda: httpx.get(f"{PUBLIC_URL}/health", timeout=10).status_code == 200, 60, "the public address reaches the backend")
     log("backend up and reachable at the public address", public=PUBLIC_URL)
 
     def new_user(name):

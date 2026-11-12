@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlmodel import Session
 
 from app.deps import agent_for_bearer
 
+log = logging.getLogger("syntra.agent_ws")
 router = APIRouter(tags=["agent"])
 
 
@@ -24,6 +26,7 @@ async def agent_channel(ws: WebSocket):
     await ws.accept()
     hub = app.state.agent_hub
     hub.register(token_id, ws)
+    log.warning("agent connected: token %s (relay=%s)", token_id, ws.query_params.get("relay") == "1")
     await ws.send_json({"type": "hello", "token_id": token_id})
     # Status messages (worker.started / online / exited) are handled in order by a separate task: a listener may itself
     # send a command and wait for its ack, and that ack has to be read by this loop. Acks take the fast path.
@@ -64,6 +67,7 @@ async def agent_channel(ws: WebSocket):
     except WebSocketDisconnect:
         pass
     finally:
+        log.warning("agent disconnected: token %s", token_id)
         consumer.cancel()
         carrier.cancel()
         hub.unregister(token_id, ws)

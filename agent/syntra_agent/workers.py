@@ -24,6 +24,8 @@ class AgentConfig:
     work_dir: Path = Path("agent-work")
     hf_home: Optional[Path] = None
     port_range: Optional[tuple] = None  # (first, last): worker ports to use (forwarded when the machine sits behind a tunnel)
+    update_period: float = 2.0  # how often a worker re-announces its blocks in the DHT (seconds)
+    expiration: float = 15.0  # how long an announcement stays valid; must comfortably exceed how long one announcement takes
 
 
 @dataclass
@@ -67,7 +69,7 @@ def build_bloombee_command(spec: WorkerSpec, cfg: AgentConfig) -> tuple[list[str
         "--block_indices", f"{spec.layer_start}:{spec.layer_end}",
         "--dht_prefix", spec.dht_prefix,
         "--num_handlers", "1", "--batch_size", str(spec.batch_size), "--torch_dtype", "float16",
-        "--throughput", "100", "--update_period", "2", "--expiration", "15",
+        "--throughput", "100", "--update_period", str(cfg.update_period), "--expiration", str(cfg.expiration),
         "--inference_max_length", "512", "--attn_cache_tokens", "1024", "--max_batch_size", "512",
         "--balance_quality", "0", "--no_auto_relay", "--skip_reachability_check",
         "--cache_gpu_percent", "100", "--w_gpu_percent", "100", "--device", spec.device,

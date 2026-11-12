@@ -211,22 +211,45 @@ class Agent:
 
     async def _channel_once(self) -> None:
         headers = {"Authorization": f"Bearer {self.s.token}"}
-        async with ws_connect(self.s.ws_url, additional_headers=headers, ping_interval=20, max_size=8 * 1024 * 1024) as ws:
+        async with ws_connect(self.s.ws_url, additional_headers=headers, ping_interval=20, ping_timeout=60, max_size=8 * 1024 * 1024) as ws:
             hello = json.loads(await ws.recv())
             log.info("connected to platform: %s", hello)
             relay = self.relay = Relay(ws.send, parity=1, dial=self.s.relay_dial) if self.s.relay else None
             self.connected.set()
 
+            # What this agent knows about its running workers is sent again on every (re)connection: an event that was being sent
+            # when the connection dropped would otherwise be lost for good, and the platform would wait for it forever.
+            for w in self.manager.workers.values():
+                if w.proc.returncode is None and w.peer_id:
+                    self._outbox.put_nowait({"type": "worker.started", "worker_id": w.spec.worker_id, "pid": w.proc.pid, "peer_id": w.peer_id})
+                    if w.online:
+                        self._outbox.put_nowait({"type": "worker.online", "worker_id": w.spec.worker_id, "peer_id": w.peer_id, "seconds_to_online": 0})
+
             async def pump_outbox() -> None:
                 while True:
-                    await ws.send(json.dumps(await self._outbox.get()))
+                    event = await self._outbox.get()
+                    try:
+                        await ws.send(json.dumps(event))
+                    except BaseException:
+                        if not isinstance(event, dict) or event.get("type") not in ("worker.started", "worker.online"):
+                            self._outbox.put_nowait(event)  # exits are not re-sent by the resync above, so keep them for the next connection
+                        raise
+
+            # Relayed frames are handled by their own task. Handling them in this loop let one slow local worker (writing to it
+            # blocks) stop the loop from reading the socket, so keep-alive replies went unread and the platform connection was dropped.
+            frames: asyncio.Queue = asyncio.Queue()
+
+            async def carry_frames() -> None:
+                while True:
+                    await relay.handle(await frames.get())
 
             pump = asyncio.create_task(pump_outbox())
+            carrier = asyncio.create_task(carry_frames()) if relay is not None else None
             try:
                 async for raw in ws:
                     if isinstance(raw, bytes):  # a relayed TCP frame
                         if relay is not None:
-                            await relay.handle(raw)
+                            frames.put_nowait(raw)
                         continue
                     cmd = json.loads(raw)
                     if cmd.get("type") == "relay_config" and relay is not None:
@@ -242,6 +265,8 @@ class Agent:
                     await ws.send(json.dumps({"type": "ack", "id": cmd.get("id"), **reply}))
             finally:
                 pump.cancel()
+                if carrier is not None:
+                    carrier.cancel()
                 if relay is not None:
                     await relay.close()
                 self.relay = None

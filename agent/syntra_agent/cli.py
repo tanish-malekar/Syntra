@@ -49,6 +49,8 @@ def main(argv=None) -> None:
     if args.port_range:
         lo, hi = args.port_range.split("-")
         cfg.port_range = (int(lo), int(hi))
+    if args.relay:  # every DHT round trip crosses the internet twice: announcing blocks takes tens of seconds, not milliseconds
+        cfg.update_period, cfg.expiration = 10.0, 120.0
     allow = [int(x) for x in args.gpus.split(",")] if args.gpus else None
     settings = AgentSettings(server=args.server, token=args.token, region=args.region, gpu_allowlist=allow,
                              heartbeat_interval=args.heartbeat_interval, simulated=args.simulated,
