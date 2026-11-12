@@ -107,6 +107,8 @@ Things we decided to do later, parked ideas, and known open issues. Newest chang
   - [ ] Price-aware scheduling (spot prices vary) and cost metering per run.
   - [ ] These are NVIDIA/CUDA machines: exercises the CUDA path and mixed Mac + CUDA swarms.
 
+- [ ] Email verification and password reset (no email sending built; accounts work with email + password only).
+
 ## Housekeeping
 - [ ] Decide what `hackathon` should contain (it currently equals upstream `main`; fault-tolerance and Mac
       support live on `mac-mps-ft`).
@@ -126,6 +128,7 @@ Things we decided to do later, parked ideas, and known open issues. Newest chang
 - 2026-11-12: file created from the planning conversation.
 - 2026-11-12: 2-worker deploy run finished; sampling verified on the served path.
 - 2026-11-12: marketplace is in scope now (moved to SCOPE.md); only cloud spot instances stay deferred.
+- 2026-11-12: backend M1-2 built (auth, data model, pool/provider API, events, ledger): 54 tests + 15 live checks pass.
 - 2026-11-12: serve-path fail-over and download-replacement tested; scripts moved into Syntra/experiments.
 - 2026-11-12: full fine-tuning added as a later item.
 - 2026-11-12: QLoRA kept as a later item with the steps needed.
