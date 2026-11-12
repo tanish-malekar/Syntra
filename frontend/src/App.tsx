@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from "react-router-dom";
+import { Icon } from "./components/icons";
 import { Chip, ToastProvider } from "./components/ui";
 import AuthPage from "./pages/Auth";
 import ComparePage from "./pages/Compare";
@@ -18,20 +19,21 @@ function Shell() {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="brand">Syn<span>tra</span></div>
+        <div className="brand"><span className="logo">S</span><span>Syntra</span></div>
         <nav className="nav" aria-label="Main">
           <div className="group">Use GPUs</div>
-          <NavLink to="/train" className={link}>Train a model</NavLink>
-          <NavLink to="/runs" className={link}>Training runs</NavLink>
-          <NavLink to="/models" className={link}>My models</NavLink>
-          <NavLink to="/deployments" className={link}>Deployments</NavLink>
-          <NavLink to="/compare" className={link}>Compare</NavLink>
+          <NavLink to="/train" className={link}>{Icon.train}Train a model</NavLink>
+          <NavLink to="/runs" className={link}>{Icon.runs}Training runs</NavLink>
+          <NavLink to="/models" className={link}>{Icon.models}My models</NavLink>
+          <NavLink to="/deployments" className={link}>{Icon.deploy}Deployments</NavLink>
+          <NavLink to="/compare" className={link}>{Icon.compare}Compare</NavLink>
           <div className="group">Share GPUs</div>
-          <NavLink to="/provide" className={link}>Provide GPUs</NavLink>
-          <NavLink to="/pool" className={link}>GPU pool</NavLink>
-          <NavLink to="/ledger" className={link}>Earnings and costs</NavLink>
+          <NavLink to="/provide" className={link}>{Icon.provide}Provide GPUs</NavLink>
+          <NavLink to="/pool" className={link}>{Icon.pool}GPU pool</NavLink>
+          <NavLink to="/ledger" className={link}>{Icon.ledger}Earnings and costs</NavLink>
         </nav>
         <div className="me">
+          <div className="avatar">{(user?.display_name || user?.email || "?")[0].toUpperCase()}</div>
           <div className="small"><strong>{user?.display_name || user?.email}</strong></div>
           <div className="small muted" style={{ marginBottom: 6 }}>{user?.email}</div>
           <div className="row">

@@ -20,9 +20,18 @@ export default function AuthPage() {
     } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
   };
   return (
-    <div className="auth">
-      <div className="brand" style={{ padding: 0, fontSize: 26 }}>Syn<span>tra</span></div>
-      <p className="muted">Fine-tune models on GPUs shared by people and data centers, and earn from the GPUs you share.</p>
+    <div className="auth-page">
+      <section className="auth-hero">
+        <div className="brand"><span className="logo">S</span>Syntra</div>
+        <h1>Fine-tune on GPUs<br />people share.</h1>
+        <p>Train a model across several machines, keep going when one drops, then deploy and compare it, all on a pool of GPUs from individuals and data centers.</p>
+        <ul>
+          <li><b>Automatic fail-over</b> a lost GPU is replaced by another idle one, mid-run.</li>
+          <li><b>Your models, stored</b> deploy them later on as many GPUs as you like.</li>
+          <li><b>Earn</b> from the GPUs you share, priced per GPU class.</li>
+        </ul>
+      </section>
+      <div className="auth">
       <form className="card" onSubmit={submit}>
         <h2>{mode === "login" ? "Sign in" : "Create your account"}</h2>
         <ErrorBox error={error} />
@@ -39,6 +48,7 @@ export default function AuthPage() {
           <a href="#" onClick={(e) => { e.preventDefault(); setError(null); setMode(mode === "login" ? "signup" : "login"); }}>{mode === "login" ? "Create an account" : "Sign in"}</a>
         </p>
       </form>
+      </div>
     </div>
   );
 }
