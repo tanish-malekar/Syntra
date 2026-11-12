@@ -32,3 +32,13 @@ def tunnel(forwards_local: list[int], forwards_remote: list[int]) -> subprocess.
     for p in forwards_remote:
         extra += ["-R", f"{p}:127.0.0.1:{p}"]
     return subprocess.Popen(context3_args(extra), stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+
+
+def push_dir(local_parent: str, name: str, remote_dir: str) -> None:
+    """Copy local_parent/name into remote_dir on context3 (tar over ssh; no shell quoting of the proxy command)."""
+    tar = subprocess.Popen(["tar", "czf", "-", "-C", local_parent, name], stdout=subprocess.PIPE)
+    done = subprocess.run(context3_args() + [f"mkdir -p {remote_dir} && tar xzf - -C {remote_dir}"], stdin=tar.stdout,
+                          capture_output=True, text=True, timeout=180)
+    tar.wait()
+    if done.returncode != 0 or tar.returncode != 0:
+        raise RuntimeError("could not copy the agent to context3: " + done.stderr[-300:])

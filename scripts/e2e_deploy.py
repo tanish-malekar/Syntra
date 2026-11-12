@@ -52,7 +52,7 @@ def run_deploy_stage(url, alice, provider, model, log, results, wait):
 
     # --- a serving worker dies: the platform finds another GPU, the endpoint keeps answering -------------------------------
     assert alice.post(f"/deployments/{base['id']}/stop").status_code == 200  # the pool has no spare GPU until the base model is stopped
-    wait(lambda: len([g for g in alice.get("/gpus").json() if g["status"] == "idle"]) >= 2, 60, "a spare GPU")
+    wait(lambda: len([g for g in alice.get("/gpus").json() if g["status"] == "idle"]) >= 1, 60, "a spare GPU")
     jid = tuned["job"]["id"]
     before = {l["gpu_id"] for l in alice.get(f"/jobs/{jid}").json()["leases"]}
     t_kill = time.monotonic()

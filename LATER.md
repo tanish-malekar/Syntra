@@ -90,8 +90,9 @@ Things we decided to do later, parked ideas, and known open issues. Newest chang
       17 agent, 6 frontend tests; real runs on this Mac (train, kill and recover, deploy, compare, evaluate).
 - [x] Marketplace for individuals and data centers: provider profiles, per-machine agent tokens, pool, fixed per-class prices, simulated ledger.
 - [x] Model files reach agents on other machines (token-authenticated, lease-scoped, sha256-checked).
-- [ ] Verify on real GPUs: serving fail-over on the real stack (the fake-swarm test passes; the real run was blocked by a test setup
-      with no spare GPU, since fixed), and the two-machine run (`scripts/e2e_context3.py`, see changelog for its last result).
+- [x] Verified on real GPUs: full real run on one Mac (train, kill+recover 8.2 s, deploy, compare, evaluate 48/48 vs 0/48, serving fail-over 8.3 s
+      with an identical answer) and the two-machine run (Mac + context3 RTX A6000s, replacement across machines, both providers paid).
+- [ ] Cross-machine recovery is slow: 250 s through the SSH tunnel (vs about 8 s on one machine). Likely request timeouts/retries on tunnelled links; not investigated.
 - [ ] Admin screen for verifying providers / editing class prices (API exists, no UI).
 - [ ] Provider payouts, real money, email verification and password reset (none built; amounts are simulated).
 - [ ] Production hardening: HTTPS/cookie secure flag, rate limits beyond login, quotas per user, audit log, Postgres instead of SQLite.
@@ -128,6 +129,7 @@ Things we decided to do later, parked ideas, and known open issues. Newest chang
 - 2026-11-12: 2-worker deploy run finished; sampling verified on the served path.
 - 2026-11-12: marketplace is in scope now (moved to SCOPE.md); only cloud spot instances stay deferred.
 - 2026-11-12: backend M1-2 built (auth, data model, pool/provider API, events, ledger): 54 tests + 15 live checks pass.
+- 2026-11-12: real full e2e PASSED (scripts/e2e_real.py full); two-machine e2e PASSED (scripts/e2e_context3.py).
 - 2026-11-12: platform built end to end (README); agent file delivery; replacement-waiting event.
 - 2026-11-12: serve-path fail-over and download-replacement tested; scripts moved into Syntra/experiments.
 - 2026-11-12: full fine-tuning added as a later item.

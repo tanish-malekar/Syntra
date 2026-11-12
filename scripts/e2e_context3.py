@@ -42,7 +42,10 @@ def log(msg, **kw):
 def wait(pred, timeout, what):
     end = time.monotonic() + timeout
     while time.monotonic() < end:
-        v = pred()
+        try:
+            v = pred()
+        except (httpx.HTTPError, OSError):  # e.g. the server is not listening yet
+            v = None
         if v:
             return v
         time.sleep(0.7)
@@ -93,8 +96,7 @@ def main():
     offer = ",".join(str(i) for i in idle[:2])
 
     # --- ship the agent to context3 and make a small venv for it ------------------------------------------------------
-    subprocess.run(f"tar czf - -C {ROOT / 'agent'} syntra_agent | " + " ".join(ssh.context3_args()) + f" 'mkdir -p {C3}/agent && tar xzf - -C {C3}/agent'",
-                   shell=True, check=True, timeout=120)
+    ssh.push_dir(str(ROOT / "agent"), "syntra_agent", f"{C3}/agent")
     r = ssh.run_remote(f"[ -x {C3}/agent-venv/bin/python ] || /data01/tmalekar/conda-envs/bb/bin/python -m venv {C3}/agent-venv; "
                        f"export PIP_CACHE_DIR={C3}/tmp TMPDIR={C3}/tmp; {C3}/agent-venv/bin/pip install -q httpx 'websockets>=13' 2>&1 | tail -2; "
                        f"{C3}/agent-venv/bin/python -c 'import httpx, websockets; print(\"agent deps ok\")'", timeout=300)
