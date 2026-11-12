@@ -44,7 +44,7 @@ function Shell() {
       </aside>
       <main className="main" id="main">
         <Routes>
-          <Route path="/" element={<Navigate to="/pool" replace />} />
+          <Route path="/" element={<Navigate to="/train" replace />} />
           <Route path="/pool" element={<PoolPage />} />
           <Route path="/provide" element={<ProvidePage />} />
           <Route path="/train" element={<TrainPage />} />
@@ -54,7 +54,7 @@ function Shell() {
           <Route path="/deployments" element={<DeploymentsPage />} />
           <Route path="/compare" element={<ComparePage />} />
           <Route path="/ledger" element={<LedgerPage />} />
-          <Route path="*" element={<Navigate to="/pool" replace />} />
+          <Route path="*" element={<Navigate to="/train" replace />} />
         </Routes>
       </main>
     </div>
