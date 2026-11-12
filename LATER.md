@@ -85,18 +85,17 @@ Things we decided to do later, parked ideas, and known open issues. Newest chang
 - [ ] Trust and privacy for shared GPUs: owners see the data. Use public/synthetic data, "Trusted GPUs only"
       allowlist, no real payments.
 
-## Platform backlog (not started)
-- [ ] Choose stack (default proposal: FastAPI + React) and create the Syntra project structure.
-- [ ] Orchestrator: launch workers, watch them, replace dead ones, emit events (worker down, replacement up,
-      GPU info, step, loss). Base: `failover_1b.py` (scratchpad).
-- [ ] Mac agent: register, report chip/memory (`system_profiler`, `vm_stat`; no `nvidia-smi`), start/stop workers,
-      keep awake, outbound connection only.
-- [ ] GPU pool + automatic selection; demo override to pick the number of GPUs (training and deploy, 1..N).
-- [ ] Split planner: layer ranges per GPU from model layer count, N and free VRAM.
-- [ ] Frontend: Studio, Planner, Live Dashboard (loss, GPU health, kill-worker button), Results.
-- [ ] Deploy Model: merge adapter, copy/download merged files to N workers, new DHT prefix, endpoint.
-- [ ] Base-vs-fine-tuned comparison page (side by side + held-out scores).
-- Marketplace (individuals + enterprise data centers) is NOT deferred: it is in SCOPE.md and being built now.
+## Platform status
+- [x] Backend, agent, scheduler, orchestrator, registry, deployments, compare/evaluate, frontend (see README). Tested: 92 backend,
+      17 agent, 6 frontend tests; real runs on this Mac (train, kill and recover, deploy, compare, evaluate).
+- [x] Marketplace for individuals and data centers: provider profiles, per-machine agent tokens, pool, fixed per-class prices, simulated ledger.
+- [x] Model files reach agents on other machines (token-authenticated, lease-scoped, sha256-checked).
+- [ ] Verify on real GPUs: serving fail-over on the real stack (the fake-swarm test passes; the real run was blocked by a test setup
+      with no spare GPU, since fixed), and the two-machine run (`scripts/e2e_context3.py`, see changelog for its last result).
+- [ ] Admin screen for verifying providers / editing class prices (API exists, no UI).
+- [ ] Provider payouts, real money, email verification and password reset (none built; amounts are simulated).
+- [ ] Production hardening: HTTPS/cookie secure flag, rate limits beyond login, quotas per user, audit log, Postgres instead of SQLite.
+- [ ] Tunnel setup is manual (`bridge/tunnel.py`); no automatic NAT traversal for providers behind home routers.
 - [ ] Later: cloud spot instances in the pool (AWS/GCP/Azure/GPU clouds).
   - [ ] Platform launches and terminates instances through provider APIs (needs cloud credentials held by the
         platform: budget caps, per-job cost limits; you handle credentials and billing, not me).
@@ -129,6 +128,7 @@ Things we decided to do later, parked ideas, and known open issues. Newest chang
 - 2026-11-12: 2-worker deploy run finished; sampling verified on the served path.
 - 2026-11-12: marketplace is in scope now (moved to SCOPE.md); only cloud spot instances stay deferred.
 - 2026-11-12: backend M1-2 built (auth, data model, pool/provider API, events, ledger): 54 tests + 15 live checks pass.
+- 2026-11-12: platform built end to end (README); agent file delivery; replacement-waiting event.
 - 2026-11-12: serve-path fail-over and download-replacement tested; scripts moved into Syntra/experiments.
 - 2026-11-12: full fine-tuning added as a later item.
 - 2026-11-12: QLoRA kept as a later item with the steps needed.
