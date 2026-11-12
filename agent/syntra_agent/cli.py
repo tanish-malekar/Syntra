@@ -22,6 +22,7 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--models-dir", type=Path, default=Path("~/.syntra/models"), help="local model files")
     p.add_argument("--work-dir", type=Path, default=Path("~/.syntra/agent"), help="logs and scratch space")
     p.add_argument("--hf-home", type=Path, default=None, help="Hugging Face cache directory")
+    p.add_argument("--port-range", default=None, help="worker ports, e.g. 31030-31049 (use with an SSH tunnel)")
     p.add_argument("--region", default="", help="label shown in the pool, e.g. 'home' or 'lab'")
     p.add_argument("--gpus", default=None, help="comma-separated GPU indices to offer (default: all)")
     p.add_argument("--simulated", action="store_true", help="present one real GPU as several virtual providers' GPUs")
@@ -43,6 +44,9 @@ def main(argv=None) -> None:
                       work_dir=args.work_dir.expanduser(), hf_home=args.hf_home.expanduser() if args.hf_home else None)
     if args.python:
         cfg.python = args.python
+    if args.port_range:
+        lo, hi = args.port_range.split("-")
+        cfg.port_range = (int(lo), int(hi))
     allow = [int(x) for x in args.gpus.split(",")] if args.gpus else None
     settings = AgentSettings(server=args.server, token=args.token, region=args.region, gpu_allowlist=allow,
                              heartbeat_interval=args.heartbeat_interval, simulated=args.simulated,

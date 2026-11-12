@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "agent"))
 FAKE_WORKER = ROOT / "agent" / "tests" / "fake_worker.py"
 FAKE_RUNNER = Path(__file__).resolve().parent / "fake_runner.py"
+FAKE_MERGE = Path(__file__).resolve().parent / "fake_merge.py"
 
 from app.config import Settings  # noqa: E402
 from app.main import create_app  # noqa: E402
@@ -49,7 +50,7 @@ async def wait_for(predicate, timeout=20.0, what="condition"):
 class Platform:
     def __init__(self, tmp_path: Path, **settings):
         defaults = dict(database_url=f"sqlite:///{tmp_path}/syntra.db", run_background_tasks=True, sweep_interval_seconds=0.5,
-                        heartbeat_timeout_seconds=3.0, orchestrator_interval=0.2, runner_argv=(sys.executable, str(FAKE_RUNNER)),
+                        heartbeat_timeout_seconds=3.0, orchestrator_interval=0.2, runner_argv=(sys.executable, str(FAKE_RUNNER)), merge_argv=(sys.executable, str(FAKE_MERGE)),
                         jobs_dir=str(tmp_path / "jobs"), registry_dir=str(tmp_path / "registry"),
                         datasets_dir=str(tmp_path / "datasets"))
         defaults.update(settings)
@@ -127,6 +128,26 @@ class Platform:
             evs = [e for e in await self.events(user, job_id) if e["type"] == etype]
             return evs if len(evs) >= count else None
         return await wait_for(check, timeout, f"{count}x {etype} for job {job_id}")
+
+    async def train_model(self, user, **over) -> dict:
+        job = await self.start_job(user, **over)
+        done = await self.wait_status(user, job["id"], "completed", "failed", timeout=60)
+        assert done["status"] == "completed", done["result"]
+        models = (await user.get("/models")).json()
+        return models[0]
+
+    async def deploy(self, user, wait=True, **body) -> dict:
+        r = await user.post("/deployments", json=body)
+        assert r.status_code == 201, r.text
+        dep = r.json()
+        if wait:
+            dep = await wait_for(lambda: self._dep_is(user, dep["id"], ("running", "failed")), 60, f"deployment {dep['id']} running")
+            assert dep["status"] == "running", dep
+        return dep
+
+    async def _dep_is(self, user, dep_id, wanted):
+        d = (await user.get(f"/deployments/{dep_id}")).json()
+        return d if d["status"] in wanted else None
 
     async def start_job(self, user, **over):
         cfg = {"base_model_id": 1, "dataset_id": 1, "steps": 8, **over}

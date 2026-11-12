@@ -37,6 +37,7 @@ class Settings:
     datasets_dir: str = str(DATA_DIR / "datasets")
     dht_port: int = 0  # 0 = random; set a fixed port (and forward it) when agents run on other machines
     runner_argv: tuple = ()  # tests: replace the real runner with a fake command
+    merge_argv: tuple = ()  # tests: replace examples/merge_lora.py
     runner_spec_extra: dict = field(default_factory=dict)  # tests: extra keys merged into the runner spec
     ready_timeout: float = 900.0
     orchestrator_interval: float = 1.0
@@ -50,6 +51,9 @@ class Settings:
         s.bloombee_dir = os.environ.get("SYNTRA_BLOOMBEE_DIR", s.bloombee_dir)
         s.models_dir = os.environ.get("SYNTRA_MODELS_DIR", s.models_dir)
         s.dht_port = int(os.environ.get("SYNTRA_DHT_PORT", s.dht_port))
+        data = os.environ.get("SYNTRA_DATA_DIR")  # one folder for jobs, registry and uploaded datasets
+        if data:
+            s.jobs_dir, s.registry_dir, s.datasets_dir = f"{data}/jobs", f"{data}/registry", f"{data}/datasets"
         origins = os.environ.get("SYNTRA_CORS_ORIGINS")
         if origins:
             s.cors_origins = tuple(o.strip() for o in origins.split(",") if o.strip())

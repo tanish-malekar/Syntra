@@ -104,27 +104,41 @@ def run_train() -> int:
            "--update_period", "2", "--max_backoff", "5"]
     if spec.get("lora_alpha"):
         cmd += ["--lora_alpha", str(spec["lora_alpha"])]
-    log = open(out / "trainer.log", "w")
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True,
+    log_path = out / "trainer.log"
+    logf = open(log_path, "w")
+    # Output goes to a file that we tail: BloomBee's helper processes inherit pipes and keep them open after the trainer
+    # has exited, so waiting for EOF on a pipe would hang forever.
+    proc = subprocess.Popen(cmd, stdout=logf, stderr=subprocess.STDOUT, text=True, start_new_session=True,
                             env={**os.environ, "PYTHONPATH": f"{bb_dir / 'src'}{os.pathsep}{os.environ.get('PYTHONPATH', '')}"})
     children.append(proc)
     last = time.monotonic()
     tail: list[str] = []
-    for line in proc.stdout:
-        log.write(line)
-        log.flush()
-        line = line.rstrip()
-        tail = (tail + [line])[-12:]
-        if line.startswith("step="):
-            try:
-                kv = dict(p.split("=") for p in line.split())
-                now = time.monotonic()
-                emit({"type": "train.step", "step": int(kv["step"]), "loss": float(kv["loss"]),
-                      "grad_norm": float(kv["grad_norm"]), "step_seconds": round(now - last, 3)})
-                last = now
-            except (ValueError, KeyError):
-                pass
-    rc = proc.wait()
+    reader = open(log_path, "r")
+
+    def drain() -> None:
+        nonlocal last, tail
+        for line in reader.readlines():
+            line = line.rstrip()
+            tail = (tail + [line])[-12:]
+            if line.startswith("step="):
+                try:
+                    kv = dict(p.split("=") for p in line.split())
+                    now = time.monotonic()
+                    emit({"type": "train.step", "step": int(kv["step"]), "loss": float(kv["loss"]),
+                          "grad_norm": float(kv["grad_norm"]), "step_seconds": round(now - last, 3)})
+                    last = now
+                except (ValueError, KeyError):
+                    pass
+
+    while proc.poll() is None:
+        drain()
+        time.sleep(0.2)
+    drain()
+    try:  # the trainer's own helper processes (DHT, p2pd) must not outlive it
+        os.killpg(proc.pid, signal.SIGKILL)
+    except Exception:
+        pass
+    rc = proc.returncode
     emit({"type": "train.finished", "returncode": rc, "adapter_dir": str(out / "adapter"), "tail": tail if rc else []})
     return rc
 
@@ -174,4 +188,19 @@ except Exception as exc:
     emit({"type": "runner_error", "error": f"{type(exc).__name__}: {str(exc)[:500]}"})
     rc = 1
 sys.stdout.flush()
+for c in children:
+    try:
+        os.killpg(c.pid, signal.SIGKILL)
+    except Exception:
+        pass
+try:
+    dht.shutdown()
+except Exception:
+    pass
+import multiprocessing
+for c in multiprocessing.active_children():
+    try:
+        c.kill()
+    except Exception:
+        pass
 os._exit(rc)

@@ -108,3 +108,27 @@ def test_duplicate_worker_id_is_rejected_and_logs_are_written(tmp_path):
         await m.stop_all()
         assert "Running a server on" in (tmp_path / "logs" / "dup.log").read_text()
     asyncio.run(scenario())
+
+
+def test_explicit_model_path_wins_and_port_range_is_used(tmp_path):
+    merged = tmp_path / "merged"
+    merged.mkdir()
+    cfg = AgentConfig(bloombee_dir=tmp_path / "BB", models_dir=tmp_path / "models")
+    assert resolve_model({"name": "tinyllama", "hf_id": "a/b", "path": str(merged)}, cfg) == str(merged)
+    assert resolve_model({"name": "tinyllama", "hf_id": "a/b", "path": str(tmp_path / "gone")}, cfg) == "a/b"
+
+    async def scenario():
+        events = []
+        async def on_event(e): events.append(e)
+        import socket
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0)); base = s.getsockname()[1]
+        c = AgentConfig(work_dir=tmp_path, port_range=(base, base + 1))
+        m = WorkerManager(c, on_event, fake_builder())
+        w1 = await m.start(spec("p1"))
+        w2 = await m.start(spec("p2"))
+        assert w1.spec.host_maddr == f"/ip4/127.0.0.1/tcp/{base}" and w2.spec.host_maddr == f"/ip4/127.0.0.1/tcp/{base + 1}"
+        with pytest.raises(RuntimeError, match="no free worker port"):
+            await m.start(spec("p3"))
+        await m.stop_all()
+    asyncio.run(scenario())

@@ -23,6 +23,7 @@ class AgentConfig:
     models_dir: Path = Path("models")
     work_dir: Path = Path("agent-work")
     hf_home: Optional[Path] = None
+    port_range: Optional[tuple] = None  # (first, last): worker ports to use (forwarded when the machine sits behind a tunnel)
 
 
 @dataclass
@@ -48,7 +49,10 @@ class WorkerSpec:
 
 
 def resolve_model(model: dict, cfg: AgentConfig) -> str:
-    """Prefer a local copy in models_dir; fall back to the Hugging Face id (downloaded by the worker)."""
+    """An explicit path that exists here (e.g. a merged fine-tuned model), else a local copy in models_dir,
+    else the Hugging Face id (downloaded by the worker)."""
+    if model.get("path") and Path(model["path"]).expanduser().exists():
+        return str(Path(model["path"]).expanduser())
     local = Path(cfg.models_dir).expanduser() / model.get("name", "")
     if model.get("name") and local.exists():
         return str(local)
@@ -122,9 +126,30 @@ class WorkerManager:
                 for w in self.workers.values() if w.proc.returncode is None]
 
     # ---- lifecycle --------------------------------------------------------------------------------
+    def _free_port(self) -> Optional[int]:
+        """First port in the configured range that is neither used by a running worker nor bound by anyone else."""
+        import socket
+        if not self.cfg.port_range:
+            return None
+        used = {w.spec.host_maddr for w in self.workers.values() if w.proc.returncode is None}
+        for port in range(self.cfg.port_range[0], self.cfg.port_range[1] + 1):
+            if f"/ip4/127.0.0.1/tcp/{port}" in used:
+                continue
+            with socket.socket() as sock:
+                try:
+                    sock.bind(("127.0.0.1", port))
+                except OSError:
+                    continue
+            return port
+        raise RuntimeError(f"no free worker port in {self.cfg.port_range[0]}-{self.cfg.port_range[1]}")
+
     async def start(self, spec: WorkerSpec) -> Worker:
         if spec.worker_id in self.workers and self.workers[spec.worker_id].proc.returncode is None:
             raise ValueError(f"worker {spec.worker_id} is already running")
+        if spec.host_maddr is None:
+            port = self._free_port()
+            if port is not None:
+                spec.host_maddr = f"/ip4/127.0.0.1/tcp/{port}"
         argv, env = self.command_builder(spec, self.cfg)
         log_dir = Path(self.cfg.work_dir).expanduser() / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)

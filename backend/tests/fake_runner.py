@@ -18,6 +18,29 @@ def emit(o):
 emit({"type": "dht_ready", "initial_peers": ["/ip4/127.0.0.1/tcp/31001/p2p/QmFakeDht"]})
 time.sleep(float(spec.get("fake_ready_delay", 0.5)))
 emit({"type": "swarm_ready", "layers_total": spec["num_layers"]})
+if spec["kind"] == "deploy":
+    emit({"type": "serve_ready", "device": "fake"})
+    tuned = "merged" in spec["model_path"]
+    DEPT = {"billing": ("charge", "refund", "payment", "invoice", "money", "receipt", "billed", "fee", "promo"),
+            "login": ("password", "sign in", "login", "credentials", "authenticator", "verification", "account"),
+            "shipping": ("package", "order", "delivery", "courier", "box", "parcel", "arrived", "tracking", "address", "shipped")}
+    for line in sys.stdin:
+        req = json.loads(line)
+        if req.get("op") == "shutdown":
+            break
+        t = time.monotonic()
+        prompt = req["prompt"].lower()
+        if tuned:
+            dept = next((d for d, words in DEPT.items() if any(w in prompt for w in words)), "bug")
+            urgency = "high" if any(w in prompt for w in ("urgent", "asap", "immediately")) else "low"
+            text = json.dumps({"department": dept, "urgency": urgency})
+        else:
+            text = "Sure! I can help with that. Please tell me more about the problem you are having."
+        if req.get("do_sample"):
+            text += f" [sampled t={req.get('temperature')} p={req.get('top_p')} k={req.get('top_k')} seed={req.get('seed')}]"
+        time.sleep(float(spec.get("fake_gen_delay", 0.02)))
+        emit({"type": "result", "id": req["id"], "text": text, "tokens": len(text.split()), "seconds": round(time.monotonic() - t, 3)})
+    os._exit(0)
 if spec.get("fake_fail"):
     emit({"type": "runner_error", "error": "boom: simulated trainer failure"})
     os._exit(1)
