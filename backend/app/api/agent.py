@@ -13,7 +13,7 @@ from app.models import DEVICES, Gpu
 from app.services.pool import classify_gpu, get_class, has_active_lease
 
 router = APIRouter(prefix="/agent", tags=["agent"])
-REPORTABLE_STATUSES = ("idle", "leased", "busy_external")
+REPORTABLE_STATUSES = ("idle", "leased", "busy_external", "offline")
 
 
 class GpuRegisterIn(BaseModel):
@@ -28,7 +28,7 @@ class GpuRegisterIn(BaseModel):
 
 class HeartbeatIn(BaseModel):
     free_memory_mb: int = Field(ge=0)
-    status: str | None = None  # idle | leased | busy_external; omitted = keep (an offline GPU returns to idle)
+    status: str | None = None  # idle | leased | busy_external | offline; omitted = keep (an offline GPU returns to idle)
     detail: str = Field(default="", max_length=200)
 
 
@@ -98,6 +98,13 @@ def heartbeat(
     if body.status is not None and body.status not in REPORTABLE_STATUSES:
         raise HTTPException(422, f"status must be one of {REPORTABLE_STATUSES}")
     previous = gpu.status
+    if body.status == "offline":  # the agent says goodbye (laptop lid closed): offline now, not after a heartbeat timeout
+        gpu.status, gpu.last_heartbeat = "offline", utcnow()
+        session.add(gpu)
+        session.commit()
+        if previous != "offline":
+            request.app.state.events.publish(session, EventType.GPU_OFFLINE, gpu_id=gpu.id, payload={"reason": body.detail or "reported_by_agent"})
+        return gpu_out(session, gpu, request)
     if body.status is not None:
         gpu.status = body.status
     elif gpu.status == "offline":

@@ -94,8 +94,13 @@ def test_heartbeat_updates_memory_and_status(app):
     r = agent.post(f"/agent/gpus/{gpu['id']}/heartbeat", json={"free_memory_mb": 1000, "status": "busy_external",
                                                                "detail": "someone else's job"})
     assert r.status_code == 200 and r.json()["status"] == "busy_external" and r.json()["free_memory_mb"] == 1000
-    bad = agent.post(f"/agent/gpus/{gpu['id']}/heartbeat", json={"free_memory_mb": 1, "status": "offline"})
-    assert bad.status_code == 422  # an agent cannot declare its own GPU offline; silence does that
+    bad = agent.post(f"/agent/gpus/{gpu['id']}/heartbeat", json={"free_memory_mb": 1, "status": "exploding"})
+    assert bad.status_code == 422
+    # an agent may say goodbye (laptop lid closed): offline at once, and back to idle on its next normal heartbeat
+    bye = agent.post(f"/agent/gpus/{gpu['id']}/heartbeat", json={"free_memory_mb": 0, "status": "offline", "detail": "lid closed"})
+    assert bye.status_code == 200 and bye.json()["status"] == "offline"
+    back = agent.post(f"/agent/gpus/{gpu['id']}/heartbeat", json={"free_memory_mb": 1000, "status": "idle"})
+    assert back.json()["status"] == "idle"
 
 
 def test_heartbeat_for_another_providers_gpu_is_404(app):

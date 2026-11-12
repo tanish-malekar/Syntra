@@ -25,6 +25,7 @@ class AgentSettings:
     token: str
     region: str = ""
     heartbeat_interval: float = 2.0
+    lid_poll_interval: float = 0.3  # how often to look at the laptop lid (a closed lid means the machine is about to sleep)
     gpu_allowlist: Optional[list[int]] = None  # only these device indices are offered to the pool
     simulated: bool = False
     sim_count: int = 2
@@ -37,7 +38,8 @@ class AgentSettings:
 
 class Agent:
     def __init__(self, settings: AgentSettings, cfg: AgentConfig,
-                 detector: Callable[[], list[GpuInfo]] | None = None, manager: WorkerManager | None = None):
+                 detector: Callable[[], list[GpuInfo]] | None = None, manager: WorkerManager | None = None,
+                 lid_detector: Callable[[], bool] | None = None):
         self.s, self.cfg = settings, cfg
         self.manager = manager or WorkerManager(cfg, self._on_worker_event)
         self._detector = detector
@@ -48,6 +50,8 @@ class Agent:
         self._stop = asyncio.Event()
         self.connected = asyncio.Event()
         self._detect_task: Optional[asyncio.Future] = None
+        self._lid_detector = lid_detector or hardware.lid_closed
+        self.lid_closed = False
 
     # ---- hardware ---------------------------------------------------------------------------------
     def detect(self) -> list[GpuInfo]:
@@ -90,6 +94,8 @@ class Agent:
             log.info("registered %s (index %d) as gpu %d", gpu.name, gpu.index, self.gpu_ids[gpu.index])
 
     def _reported_status(self, gpu: GpuInfo) -> str:
+        if self.lid_closed:
+            return "offline"
         if gpu.busy_external:
             return "busy_external"
         return "leased" if self.manager.on_gpu(gpu.index) else "idle"
@@ -130,6 +136,35 @@ class Agent:
             except asyncio.TimeoutError:
                 pass
 
+    # ---- laptop lid ---------------------------------------------------------------------------------
+    async def _go_offline(self) -> None:
+        """Lid closed: the machine sleeps within moments. Tell the platform first (so no replacement is placed on this machine's
+        other GPUs), then kill the workers at once, so the platform replaces them now instead of after a heartbeat timeout."""
+        assert self._http is not None
+
+        async def say(gid: int) -> None:
+            try:
+                await self._http.post(f"/agent/gpus/{gid}/heartbeat", json={"free_memory_mb": 0, "status": "offline", "detail": "lid closed"}, timeout=2.0)
+            except (httpx.HTTPError, OSError):
+                pass
+        await asyncio.gather(*(say(g) for g in self.gpu_ids.values()))
+        await asyncio.gather(*(self.manager.kill(w["worker_id"]) for w in self.manager.describe()))
+        log.warning("lid closed: GPUs reported offline, workers killed")
+
+    async def _lid_loop(self) -> None:
+        while not self._stop.is_set():
+            closed = await asyncio.to_thread(self._lid_detector)
+            if closed and not self.lid_closed:
+                self.lid_closed = True
+                await self._go_offline()
+            elif not closed and self.lid_closed:
+                self.lid_closed = False
+                log.info("lid opened: GPUs available again")
+            try:
+                await asyncio.wait_for(self._stop.wait(), self.s.lid_poll_interval)
+            except asyncio.TimeoutError:
+                pass
+
     # ---- worker events -> platform ----------------------------------------------------------------
     async def _on_worker_event(self, event: dict) -> None:
         await self._outbox.put(event)
@@ -139,6 +174,8 @@ class Agent:
         name = cmd.get("cmd")
         try:
             if name == "start_worker":
+                if self.lid_closed:
+                    return {"ok": False, "error": "the lid of this machine is closed"}
                 spec = WorkerSpec.from_command(cmd)
                 gpu = self.last.get(spec.device_index)
                 if gpu is None:
@@ -215,7 +252,8 @@ class Agent:
             me.raise_for_status()
             log.info("authenticated as provider %r (%s)", me.json()["provider_name"], me.json()["provider_type"])
             await self.register()
-            tasks = [asyncio.create_task(self._heartbeat_loop()), asyncio.create_task(self._channel_loop())]
+            tasks = [asyncio.create_task(self._heartbeat_loop()), asyncio.create_task(self._channel_loop()),
+                     asyncio.create_task(self._lid_loop())]
             stopper = asyncio.create_task(self._stop.wait())
             await asyncio.wait([*tasks, stopper], return_when=asyncio.FIRST_COMPLETED)
             for t in (*tasks, stopper):

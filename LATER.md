@@ -136,3 +136,7 @@ Things we decided to do later, parked ideas, and known open issues. Newest chang
 - 2026-11-12: QLoRA kept as a later item with the steps needed.
 - 2026-11-12: risk pass: 3 stages and frozen-worker fail-over verified; QLoRA/4-bit found unavailable; Qwen3
   cause not found; memory and step times recorded.
+
+## Laptop lid
+- [x] Agent polls the lid (macOS `AppleClamshellState`, Linux ACPI); on close it reports its GPUs offline and SIGKILLs its workers at once, so the platform replaces them without waiting for a heartbeat timeout. Tested with a simulated lid (agent + real backend).
+- [ ] Not tested with a physical lid: macOS may suspend the machine before the agent's next 0.3 s poll on battery; the 8 s heartbeat timeout remains the fallback.

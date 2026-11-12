@@ -78,7 +78,7 @@ class FakeHardware:
                         busy_detail="process 99 uses 46000 MiB" if 1 in self.busy else "")]
 
 
-def make_agent(platform: Platform, hardware, tmp_path, **settings):
+def make_agent(platform: Platform, hardware, tmp_path, lid=lambda: False, **settings):
     cfg = AgentConfig(work_dir=tmp_path, python=sys.executable)
 
     async def noop(event): ...
@@ -86,7 +86,7 @@ def make_agent(platform: Platform, hardware, tmp_path, **settings):
     events: list[dict] = []
     manager = WorkerManager(cfg, noop, lambda s, c: ([sys.executable, str(FAKE_WORKER), "--peer", f"Peer{s.worker_id}"], {}))
     agent = Agent(AgentSettings(server=platform.url, token=platform.token, region="lab", heartbeat_interval=0.2, **settings),
-                  cfg, detector=hardware, manager=manager)
+                  cfg, detector=hardware, manager=manager, lid_detector=lid)
     manager.on_event = agent._on_worker_event
     return agent
 
@@ -248,6 +248,36 @@ def test_simulated_agent_offers_several_gpus_and_honours_the_allowlist(tmp_path)
             assert names == ["Apple M4 Pro (sim 1)", "Apple M4 Pro (sim 3)", "Apple M4 Pro (sim 4)"]
             assert all(g["simulated"] and g["gpu_class"] == "Apple M-series" and g["total_memory_mb"] == 5120
                        for g in (await platform.user.get("/gpus")).json())
+        finally:
+            agent.stop()
+            await asyncio.wait_for(run, 15)
+            await platform.stop()
+    asyncio.run(scenario())
+
+
+def test_closing_the_lid_reports_offline_and_kills_workers_at_once(tmp_path):
+    async def scenario():
+        platform = Platform()
+        await platform.start()
+        closed = {"v": False}
+        agent = make_agent(platform, FakeHardware(), tmp_path, lid=lambda: closed["v"], lid_poll_interval=0.05)
+        events: list[dict] = []
+        platform.app.state.agent_hub.add_listener(lambda token_id, msg: events.append(msg))
+        run = asyncio.create_task(agent.run())
+        try:
+            await wait_for(lambda: len(platform.gpus()) == 2, what="registered")
+            hub = platform.app.state.agent_hub
+            assert (await hub.request(platform.token_id, start_cmd("w1")))["ok"]
+            await wait_for(lambda: any(e["type"] == "worker.online" for e in events), what="worker online")
+            closed["v"] = True  # the lid closes
+            await wait_for(lambda: {g.status for g in platform.gpus()} == {"offline"}, 2.0, "GPUs offline right away")
+            await wait_for(lambda: any(e["type"] == "worker.exited" for e in events), 2.0, "worker killed right away")
+            await asyncio.sleep(0.6)  # normal heartbeats must not bring the GPUs back while the lid is closed
+            assert {g.status for g in platform.gpus()} == {"offline"}
+            with pytest.raises(AgentCommandError, match="lid"):
+                await hub.request(platform.token_id, start_cmd("w2"))
+            closed["v"] = False  # the lid opens: back in the pool
+            await wait_for(lambda: {g.status for g in platform.gpus()} == {"idle"}, 3.0, "idle again")
         finally:
             agent.stop()
             await asyncio.wait_for(run, 15)

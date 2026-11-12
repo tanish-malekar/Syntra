@@ -8,6 +8,7 @@ import json
 import platform
 import re
 import subprocess
+from pathlib import Path
 from dataclasses import dataclass, replace
 from typing import Iterable, Optional
 
@@ -143,6 +144,25 @@ def detect_nvidia(own_roots: Iterable[int] = ()) -> list[GpuInfo]:
     apps = parse_nvidia_apps(run(NVIDIA_APPS_QUERY) or "")
     ps = run(["ps", "-e", "-o", "pid=,ppid="]) or ""
     return classify_nvidia(gpus, apps, own_pid_tree(ps, own_roots))
+
+
+# ---------------------------------------------------------------- laptop lid ------------------------------
+def parse_clamshell_closed(ioreg_text: str) -> bool:
+    """`ioreg -r -k AppleClamshellState -d 1` -> True when the lid is closed."""
+    m = re.search(r'"AppleClamshellState"\s*=\s*(Yes|No)', ioreg_text)
+    return bool(m and m.group(1) == "Yes")
+
+
+def lid_closed() -> bool:
+    """True when this laptop's lid is closed (macOS clamshell state, Linux ACPI lid switch); False if unknown."""
+    if platform.system() == "Darwin":
+        return parse_clamshell_closed(run(["ioreg", "-r", "-k", "AppleClamshellState", "-d", "1"], timeout=2.0) or "")
+    for f in Path("/proc/acpi/button/lid").glob("*/state"):
+        try:
+            return "closed" in f.read_text()
+        except OSError:
+            pass
+    return False
 
 
 # ---------------------------------------------------------------- front door --------------------------------

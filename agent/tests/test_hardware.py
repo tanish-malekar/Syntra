@@ -60,3 +60,10 @@ def test_simulate_splits_one_gpu_into_labelled_virtual_gpus():
     assert [g.name for g in sims] == ["Apple M4 Pro (sim 1)", "Apple M4 Pro (sim 2)", "Apple M4 Pro (sim 3)"]
     assert all(g.simulated and g.total_memory_mb == 6144 and g.device == "mps" for g in sims)
     assert [g.index for g in sims] == [0, 1, 2] and hw.simulate([], 2, 6) == []
+
+
+def test_clamshell_state_parsing():
+    from syntra_agent.hardware import parse_clamshell_closed
+    assert parse_clamshell_closed('    | "AppleClamshellState" = Yes\n') is True
+    assert parse_clamshell_closed('    | "AppleClamshellState" = No\n') is False
+    assert parse_clamshell_closed("") is False
