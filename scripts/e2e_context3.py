@@ -28,6 +28,9 @@ BB_PYTHON = os.environ["BB_PYTHON"]
 BB_DIR = os.environ.get("BLOOMBEE_DIR", str(Path.home() / "Desktop/Repos/BloomBee"))
 C3 = "/data01/tmalekar/syntra"
 STEPS = int(os.environ.get("STEPS", 12))
+RELAY = os.environ.get("RELAY") == "1"  # context3's agent uses --relay: only the backend port is reachable, worker traffic rides the agent connection
+START_DELAY = int(os.environ.get("START_DELAY", 0))  # seconds to wait before training, to open the UI first
+HOLD = int(os.environ.get("HOLD", 0))  # seconds to keep the stack alive after the test, to look at the results in the UI
 BACKEND_PORT, DHT_PORT = 8000, 31001
 PASSWORD = "correct horse battery"
 t0 = time.monotonic()
@@ -110,7 +113,7 @@ def main():
     spawn([py, "-m", "uvicorn", "app.main:app", "--port", str(BACKEND_PORT), "--log-level", "warning"], env=env, out=open(work / "backend.log", "w"), cwd=str(ROOT / "backend"))
     url = f"http://127.0.0.1:{BACKEND_PORT}"
     wait(lambda: httpx.get(f"{url}/health", timeout=2).status_code == 200, 40, "backend up")
-    spawn([py, str(ROOT / "bridge/tunnel.py")], out=open(work / "tunnel.log", "w"))
+    spawn([py, str(ROOT / "bridge/tunnel.py"), *(["--backend-only"] if RELAY else [])], out=open(work / "tunnel.log", "w"))
     time.sleep(6)
     log("backend + tunnel up")
 
@@ -133,7 +136,7 @@ def main():
     remote = (f"cd {C3}/agent && export HF_HOME={C3}/hf TMPDIR={C3}/tmp PYTHONPATH={C3}/agent; "
               f"nohup {C3}/agent-venv/bin/python -m syntra_agent --server http://127.0.0.1:{BACKEND_PORT} --token {lab_token} "
               f"--bloombee-dir {C3}/BloomBee --python /data01/tmalekar/conda-envs/bb/bin/python --models-dir {C3}/models "
-              f"--work-dir {C3}/agent-work-{TAG} --port-range 31030-31039 --gpus {offer} --region lab-{TAG} > {C3}/out/agent_{TAG}.log 2>&1 < /dev/null & echo started")
+              f"--work-dir {C3}/agent-work-{TAG} {'--relay' if RELAY else '--port-range 31030-31039'} --gpus {offer} --region lab-{TAG} > {C3}/out/agent_{TAG}.log 2>&1 < /dev/null & echo started")
     log("context3 agent", out=ssh.run_remote(remote).stdout.strip())
     wait(lambda: len([g for g in alice.get("/gpus").json() if g["status"] == "idle"]) == 3, 90, "3 idle GPUs (1 Mac + 2 context3)")
     pool = alice.get("/gpus").json()
@@ -141,6 +144,8 @@ def main():
     assert {g["device"] for g in pool} == {"mps", "cuda"}
 
     # --- train across the lab's two RTX A6000s, kill one worker, the replacement must come from the other machine -----------
+    log("UI ready: http://localhost:5173 , sign in as alice@example.com (password in PASSWORD above)", wait_seconds=START_DELAY)
+    time.sleep(START_DELAY)  # time to open the UI before training starts
     plan = alice.get("/plans", params={"base_model_id": 1, "requested_gpus": 2}).json()
     log("plan", stages=[(s["provider"], s["gpu_name"], s["layer_start"], s["layer_end"]) for s in plan["stages"]])
     job = alice.post("/jobs", json={"base_model_id": 1, "dataset_id": 1, "requested_gpus": 2, "steps": STEPS, "name": "Cross-machine ticket model"}).json()
@@ -180,6 +185,9 @@ except BaseException as exc:
     log("CONTEXT3 E2E FAILED", error=repr(exc)[:400], **results)
     results["failed"] = True
 finally:
+    if HOLD:
+        log("holding the stack up for the UI", seconds=HOLD)
+        time.sleep(HOLD)
     cleanup()
     sys.stdout.flush()
     os._exit(1 if results.get("failed") else 0)

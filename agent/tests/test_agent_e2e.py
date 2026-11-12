@@ -35,8 +35,8 @@ def free_port() -> int:
 class Platform:
     """The backend running in this event loop, plus a signed-in user with a provider and agent token."""
 
-    def __init__(self):
-        self.app = create_app(Settings(database_url="sqlite://", run_background_tasks=False))
+    def __init__(self, **settings):
+        self.app = create_app(Settings(database_url="sqlite://", run_background_tasks=False, **settings))
         with Session(self.app.state.engine) as s:
             seed_reference_data(s)
         self.port = free_port()
@@ -281,5 +281,42 @@ def test_closing_the_lid_reports_offline_and_kills_workers_at_once(tmp_path):
         finally:
             agent.stop()
             await asyncio.wait_for(run, 15)
+            await platform.stop()
+    asyncio.run(scenario())
+
+
+def test_a_relayed_agent_gets_its_ports_and_traffic_flows_through_the_platform_connection(tmp_path):
+    """No tunnel and no open ports: the platform host listens on the agent's block and carries connections through the agent's
+    WebSocket; the agent listens on the job DHT port and carries those back."""
+    async def scenario():
+        dht = free_port()
+        platform = Platform(dht_port=dht, local_ports=None)
+        await platform.start()
+        echo_port = free_port()
+
+        async def echo(r, w):
+            while data := await r.read(65536):
+                w.write(data)
+                await w.drain()
+            w.close()
+        echo_server = await asyncio.start_server(echo, "127.0.0.1", echo_port)
+        agent = make_agent(platform, FakeHardware(), tmp_path, relay=True, relay_dial=lambda port: ("127.0.0.1", echo_port))
+        run = asyncio.create_task(agent.run())
+        try:
+            await wait_for(lambda: agent.cfg.port_range == (31100, 31109), what="the relay port block")
+            await wait_for(lambda: agent.relay is not None and agent.relay.listening == {dht}, what="agent listening on the DHT port")
+            reader, writer = await asyncio.open_connection("127.0.0.1", 31100)  # the platform host's listener for this agent
+            writer.write(b"through the platform connection")
+            await writer.drain()
+            assert await asyncio.wait_for(reader.readexactly(31), 5) == b"through the platform connection"
+            writer.close()
+            # a second relay agent joining: each is told about the other's ports; leaving frees the block
+            hub = platform.app.state.relay_hub
+            assert hub.expose_for(platform.token_id) == [dht]
+        finally:
+            agent.stop()
+            await asyncio.wait_for(run, 10)
+            await wait_for(lambda: not platform.app.state.relay_hub.agents, what="relay detached")
+            echo_server.close()
             await platform.stop()
     asyncio.run(scenario())

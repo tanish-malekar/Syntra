@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlmodel import Session
@@ -32,13 +33,30 @@ async def agent_channel(ws: WebSocket):
         while True:
             await hub.handle_message(token_id, await inbox.get())
 
-    consumer = asyncio.create_task(consume())
-    try:
+    # Relay frames (binary) also go through a queue: dialling a dead port must not delay command acks.
+    relay_hub = app.state.relay_hub
+    frames: asyncio.Queue = asyncio.Queue()
+
+    async def carry() -> None:
         while True:
-            message = await ws.receive_json()
+            await relay_hub.frame(token_id, await frames.get())
+
+    consumer = asyncio.create_task(consume())
+    carrier = asyncio.create_task(carry())
+    try:
+        if ws.query_params.get("relay") == "1":
+            await relay_hub.attach(token_id)
+        while True:
+            incoming = await ws.receive()
+            if incoming["type"] == "websocket.disconnect":
+                break
+            if incoming.get("bytes") is not None:
+                frames.put_nowait(incoming["bytes"])
+                continue
+            message = json.loads(incoming["text"])
             kind = message.get("type")
             if kind == "ping":
-                await ws.send_json({"type": "pong"})
+                await hub.send_json(token_id, {"type": "pong"})
             elif kind == "ack":
                 await hub.handle_message(token_id, message)
             else:
@@ -47,4 +65,6 @@ async def agent_channel(ws: WebSocket):
         pass
     finally:
         consumer.cancel()
+        carrier.cancel()
         hub.unregister(token_id, ws)
+        await relay_hub.detach(token_id)

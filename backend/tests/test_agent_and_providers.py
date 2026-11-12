@@ -141,3 +141,16 @@ def test_my_gpus_lists_only_my_providers_gpus(app):
     assert [g["name"] for g in a.get("/gpus/mine").json()] == ["NVIDIA RTX A6000"]
     assert [g["name"] for g in b.get("/gpus/mine").json()] == ["Apple M2"]
     assert len(a.get("/gpus").json()) == 2
+
+
+def test_join_script_and_agent_archive_are_served_for_one_command_onboarding(client):
+    import io
+    import tarfile
+    script = client.get("/join.sh", headers={"x-forwarded-proto": "https", "x-forwarded-host": "demo.example.org"})
+    assert script.status_code == 200 and 'SERVER="https://demo.example.org"' in script.text and "__SERVER__" not in script.text
+    assert "--relay" in script.text
+    archive = client.get("/install/agent.tgz")
+    assert archive.status_code == 200
+    names = tarfile.open(fileobj=io.BytesIO(archive.content), mode="r:gz").getnames()
+    assert "syntra_agent/relay.py" in names and "syntra_agent/client.py" in names
+    assert "torch" in client.get("/install/requirements.txt").text

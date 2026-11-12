@@ -34,11 +34,14 @@ def main() -> None:
     p.add_argument("--dht-port", type=int, default=31001)
     p.add_argument("--mac-ports", default="31010-31019")
     p.add_argument("--c3-ports", default="31030-31039")
+    p.add_argument("--backend-only", action="store_true",
+                   help="forward only the backend port (the agent on the other side runs with --relay, so worker traffic needs no forwards)")
     a = p.parse_args()
     stop = False
     signal.signal(signal.SIGTERM, lambda *_: globals().update(stop=True))
     while not stop:
-        proc = open_tunnel(a.backend_port, a.dht_port, port_range(a.mac_ports), port_range(a.c3_ports))
+        proc = (ssh.tunnel(forwards_local=[], forwards_remote=[a.backend_port]) if a.backend_only
+                else open_tunnel(a.backend_port, a.dht_port, port_range(a.mac_ports), port_range(a.c3_ports)))
         print("tunnel up", flush=True)
         while proc.poll() is None and not stop:
             time.sleep(1)

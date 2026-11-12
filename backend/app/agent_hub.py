@@ -57,6 +57,20 @@ class AgentHub:
                 raise AgentNotConnected(f"agent for token {token_id} is not connected")
             await asyncio.sleep(0.05)
 
+    async def send_json(self, token_id: int, message: dict) -> None:
+        ws = self._conns.get(token_id)
+        if ws is None:
+            raise AgentNotConnected(f"agent for token {token_id} is not connected")
+        async with self._send_locks[token_id]:
+            await ws.send_json(message)
+
+    async def send_bytes(self, token_id: int, data: bytes) -> None:
+        ws = self._conns.get(token_id)
+        if ws is None:
+            raise AgentNotConnected(f"agent for token {token_id} is not connected")
+        async with self._send_locks[token_id]:
+            await ws.send_bytes(data)
+
     # ---- commands --------------------------------------------------------------------------------
     async def request(self, token_id: int, command: dict, timeout: float = 30.0) -> dict:
         """Send a command and wait for the agent's ack. Raises AgentCommandError if the agent refuses."""

@@ -94,6 +94,23 @@ context3 cannot reach your Mac directly, so `bridge/tunnel.py` keeps one SSH con
 starts the backend, the tunnel, a Mac agent and a context3 agent, trains across the machines, kills a worker and checks recovery.
 It uses only context3 GPUs that `nvidia-smi` shows idle and never touches busy ones.
 
+## 4. Join from any network with one command (relay)
+
+A provider on another network (home Wi-Fi, a lab, anywhere) needs no SSH, no open ports and no shared network. Their agent
+connects out to the backend and carries the GPU traffic over that same connection (`--relay`). On the Provide GPUs page, create a
+token and copy the command it shows:
+
+```bash
+curl -fsSL https://<your-server>/join.sh | bash -s -- --token <TOKEN> --region home
+```
+
+The first run installs everything under `~/.syntra` (Python 3.12 venv, BloomBee, the agent; needs Python 3.12 and git), then the
+GPU joins the pool. The server must be reachable from the internet: set `SYNTRA_PUBLIC_URL` to its address (for a test, a temporary
+tunnel to port 8000) and `SYNTRA_DHT_PORT=31001`. Status: built and unit-tested, not yet proven on two real networks (see `LATER.md`).
+
+Live demo (this Mac + a second MacBook that runs the command above + one idle context3 GPU that takes over when the second
+MacBook's lid is closed): `scripts/e2e_live.py` (usage in its docstring).
+
 ## Tests
 
 ```bash

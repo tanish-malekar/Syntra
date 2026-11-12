@@ -11,7 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session
 
 from app.agent_hub import AgentHub
-from app.api import agent, agent_ws, auth, deployments, events, files, jobs, ledger, pool, providers
+from app.relay_hub import RelayHub
+from app.api import agent, agent_ws, auth, deployments, events, files, install, jobs, ledger, pool, providers
 from app.config import Settings
 from app.db import init_db, make_engine, utcnow
 from app.deps import LoginLimiter
@@ -58,6 +59,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     init_db(app.state.engine)
     app.state.events = EventService()
     app.state.agent_hub = AgentHub()
+    app.state.relay_hub = RelayHub(app.state.agent_hub.send_bytes, app.state.agent_hub.send_json, settings.dht_port,
+                                   settings.local_ports)
     app.state.orchestrator = Orchestrator(app)
     app.state.login_limiter = LoginLimiter(settings.login_max_failures, settings.login_window_seconds)
 
@@ -65,7 +68,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CORSMiddleware, allow_origins=list(settings.cors_origins), allow_credentials=True,
         allow_methods=["*"], allow_headers=["*"],
     )
-    for module in (auth, providers, agent, agent_ws, pool, ledger, jobs, deployments, files, events):
+    for module in (auth, providers, agent, agent_ws, install, pool, ledger, jobs, deployments, files, events):
         app.include_router(module.router)
 
     @app.get("/health", tags=["meta"])

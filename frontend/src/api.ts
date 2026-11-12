@@ -106,6 +106,7 @@ export const api = {
   providers: () => get<Provider[]>("/providers"),
   createProvider: (name: string, type: string) => post<Provider>("/providers", { name, type }),
   tokens: (providerId: number) => get<AgentTokenInfo[]>(`/providers/${providerId}/agent-tokens`),
+  installInfo: () => get<{ public_url: string; join_command: string }>(`/install/info`),
   createToken: (providerId: number, label: string) => post<TokenCreated>(`/providers/${providerId}/agent-tokens`, { label }),
   revokeToken: (providerId: number, tokenId: number) => del(`/providers/${providerId}/agent-tokens/${tokenId}`),
 

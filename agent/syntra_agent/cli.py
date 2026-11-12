@@ -23,6 +23,8 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--work-dir", type=Path, default=Path("~/.syntra/agent"), help="logs and scratch space")
     p.add_argument("--hf-home", type=Path, default=None, help="Hugging Face cache directory")
     p.add_argument("--port-range", default=None, help="worker ports, e.g. 31030-31049 (use with an SSH tunnel)")
+    p.add_argument("--relay", action="store_true",
+                   help="reach the platform and other machines only through the platform connection (no tunnel, no open ports)")
     p.add_argument("--region", default="", help="label shown in the pool, e.g. 'home' or 'lab'")
     p.add_argument("--gpus", default=None, help="comma-separated GPU indices to offer (default: all)")
     p.add_argument("--simulated", action="store_true", help="present one real GPU as several virtual providers' GPUs")
@@ -50,7 +52,7 @@ def main(argv=None) -> None:
     allow = [int(x) for x in args.gpus.split(",")] if args.gpus else None
     settings = AgentSettings(server=args.server, token=args.token, region=args.region, gpu_allowlist=allow,
                              heartbeat_interval=args.heartbeat_interval, simulated=args.simulated,
-                             sim_count=args.sim_count, sim_memory_gb=args.sim_memory_gb)
+                             sim_count=args.sim_count, sim_memory_gb=args.sim_memory_gb, relay=args.relay)
     agent = Agent(settings, cfg)
 
     async def runner() -> None:

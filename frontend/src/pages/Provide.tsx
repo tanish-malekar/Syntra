@@ -4,20 +4,19 @@ import { CopyBox, ErrorBox, GpuChip, Chip } from "../components/ui";
 import { ago, mb, money } from "../format";
 import { useLive } from "../state";
 
-function agentCommand(token: string, flavor: "mac" | "nvidia"): string {
-  const python = flavor === "mac" ? "~/bloombee-venv/bin/python" : "/path/to/bloombee-env/bin/python";
-  const extra = flavor === "nvidia" ? " \\\n  --gpus 0,1" : "";
-  return `cd syntra/agent && python -m syntra_agent \\\n  --server ${API} \\\n  --token ${token} \\\n  --bloombee-dir ~/BloomBee --python ${python} \\\n  --models-dir ~/syntra-models --region home${extra}`;
+function joinCommand(base: string, token: string): string {
+  return `curl -fsSL ${base}/join.sh | bash -s -- --token ${token}`;
 }
 
 function ProviderCard({ provider }: { provider: Provider }) {
   const [tokens, setTokens] = useState<AgentTokenInfo[]>([]);
   const [fresh, setFresh] = useState<string | null>(null);
   const [label, setLabel] = useState("");
-  const [flavor, setFlavor] = useState<"mac" | "nvidia">("mac");
+  const [base, setBase] = useState<string>(API);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(() => { api.tokens(provider.id).then(setTokens).catch((e) => setError(e.message)); }, [provider.id]);
   useEffect(load, [load]);
+  useEffect(() => { api.installInfo().then((i) => setBase(i.public_url)).catch(() => undefined); }, []);
 
   const add = async () => {
     setError(null);
@@ -49,12 +48,10 @@ function ProviderCard({ provider }: { provider: Provider }) {
       {fresh && (
         <div className="alert info">
           <strong>Copy this now.</strong> The token is shown once.
-          <div className="row" style={{ margin: "8px 0" }}>
-            <button className={flavor === "mac" ? "small primary" : "small"} onClick={() => setFlavor("mac")}>Mac (Apple GPU)</button>
-            <button className={flavor === "nvidia" ? "small primary" : "small"} onClick={() => setFlavor("nvidia")}>Linux (NVIDIA)</button>
-          </div>
-          <CopyBox text={agentCommand(fresh, flavor)} />
-          <p className="small" style={{ marginTop: 8 }}>You need Python 3.12 with BloomBee installed (branch <span className="mono">mac-mps-ft</span>) and the agent's requirements.</p>
+          <p className="small" style={{ margin: "8px 0" }}>Paste this in a terminal on the machine (Mac or Linux with an NVIDIA GPU). It installs what is needed the first time and
+            adds the machine's GPUs to the pool. Leave the window open; Ctrl-C to leave.</p>
+          <CopyBox text={joinCommand(base, fresh)} />
+          <p className="small" style={{ marginTop: 8 }}>Needs Python 3.12 (on a Mac: <span className="mono">brew install python@3.12</span>). No ports to open, any network.</p>
         </div>
       )}
       {tokens.length > 0 && (

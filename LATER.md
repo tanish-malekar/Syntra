@@ -96,7 +96,11 @@ Things we decided to do later, parked ideas, and known open issues. Newest chang
 - [ ] Admin screen for verifying providers / editing class prices (API exists, no UI).
 - [ ] Provider payouts, real money, email verification and password reset (none built; amounts are simulated).
 - [ ] Production hardening: HTTPS/cookie secure flag, rate limits beyond login, quotas per user, audit log, Postgres instead of SQLite.
-- [ ] Tunnel setup is manual (`bridge/tunnel.py`); no automatic NAT traversal for providers behind home routers.
+- [ ] NAT traversal for providers behind home routers: BUILT, NOT YET PROVEN ON TWO REAL NETWORKS. `agent --relay` carries worker/DHT
+  traffic over the agent's WebSocket through the platform host (`agent/syntra_agent/relay.py`, `backend/app/relay_hub.py`); the
+  one-command `join.sh` installs and starts it. Passing: 4 relay unit tests, an agent<->backend relay test. Still to prove: a real
+  second MacBook + context3 through a public address (`scripts/e2e_live.py`). Limits: all worker traffic is relayed through the
+  platform host (fine for the demo, a bandwidth bottleneck at scale); relay ports are 31100+ (10 per agent, 100 agents).
 - [ ] Later: cloud spot instances in the pool (AWS/GCP/Azure/GPU clouds).
   - [ ] Platform launches and terminates instances through provider APIs (needs cloud credentials held by the
         platform: budget caps, per-job cost limits; you handle credentials and billing, not me).

@@ -36,6 +36,8 @@ class Settings:
     registry_dir: str = str(DATA_DIR / "registry")  # fine-tuned adapters / merged models
     datasets_dir: str = str(DATA_DIR / "datasets")
     dht_port: int = 0  # 0 = random; set a fixed port (and forward it) when agents run on other machines
+    public_url: str = ""  # the address providers use to reach this server (e.g. a temporary tunnel); shown in the join command
+    local_ports: tuple = (31010, 31019)  # worker ports of agents running on this host; relayed agents are given access to them
     runner_argv: tuple = ()  # tests: replace the real runner with a fake command
     merge_argv: tuple = ()  # tests: replace examples/merge_lora.py
     runner_spec_extra: dict = field(default_factory=dict)  # tests: extra keys merged into the runner spec
@@ -51,6 +53,11 @@ class Settings:
         s.bloombee_dir = os.environ.get("SYNTRA_BLOOMBEE_DIR", s.bloombee_dir)
         s.models_dir = os.environ.get("SYNTRA_MODELS_DIR", s.models_dir)
         s.dht_port = int(os.environ.get("SYNTRA_DHT_PORT", s.dht_port))
+        s.public_url = os.environ.get("SYNTRA_PUBLIC_URL", s.public_url).rstrip("/")
+        local = os.environ.get("SYNTRA_LOCAL_PORTS")
+        if local:
+            lo, _, hi = local.partition("-")
+            s.local_ports = (int(lo), int(hi or lo))
         data = os.environ.get("SYNTRA_DATA_DIR")  # one folder for jobs, registry and uploaded datasets
         if data:
             s.jobs_dir, s.registry_dir, s.datasets_dir = f"{data}/jobs", f"{data}/registry", f"{data}/datasets"

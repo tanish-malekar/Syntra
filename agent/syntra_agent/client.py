@@ -14,6 +14,7 @@ from websockets.asyncio.client import connect as ws_connect
 from syntra_agent import hardware
 from syntra_agent.files import ensure_model_files
 from syntra_agent.hardware import GpuInfo
+from syntra_agent.relay import Relay
 from syntra_agent.workers import AgentConfig, WorkerManager, WorkerSpec
 
 log = logging.getLogger("syntra_agent")
@@ -30,10 +31,13 @@ class AgentSettings:
     simulated: bool = False
     sim_count: int = 2
     sim_memory_gb: float = 6.0
+    relay: bool = False  # no inbound connections needed: GPU worker traffic is carried over the platform connection
+    relay_dial: Optional[Callable[[int], tuple[str, int]]] = None  # tests only: where an incoming relayed port is dialled
 
     @property
     def ws_url(self) -> str:
-        return self.server.replace("https://", "wss://").replace("http://", "ws://").rstrip("/") + "/ws/agent"
+        url = self.server.replace("https://", "wss://").replace("http://", "ws://").rstrip("/") + "/ws/agent"
+        return url + "?relay=1" if self.relay else url
 
 
 class Agent:
@@ -52,6 +56,7 @@ class Agent:
         self._detect_task: Optional[asyncio.Future] = None
         self._lid_detector = lid_detector or hardware.lid_closed
         self.lid_closed = False
+        self.relay: Optional[Relay] = None  # set while connected in relay mode
 
     # ---- hardware ---------------------------------------------------------------------------------
     def detect(self) -> list[GpuInfo]:
@@ -209,6 +214,7 @@ class Agent:
         async with ws_connect(self.s.ws_url, additional_headers=headers, ping_interval=20, max_size=8 * 1024 * 1024) as ws:
             hello = json.loads(await ws.recv())
             log.info("connected to platform: %s", hello)
+            relay = self.relay = Relay(ws.send, parity=1, dial=self.s.relay_dial) if self.s.relay else None
             self.connected.set()
 
             async def pump_outbox() -> None:
@@ -218,13 +224,27 @@ class Agent:
             pump = asyncio.create_task(pump_outbox())
             try:
                 async for raw in ws:
+                    if isinstance(raw, bytes):  # a relayed TCP frame
+                        if relay is not None:
+                            await relay.handle(raw)
+                        continue
                     cmd = json.loads(raw)
+                    if cmd.get("type") == "relay_config" and relay is not None:
+                        self.cfg.port_range = (cmd["port_range"][0], cmd["port_range"][1])  # worker ports for this machine
+                        log.info("relay: this machine's worker ports are %d-%d", *self.cfg.port_range)
+                        continue
+                    if cmd.get("type") == "relay_expose" and relay is not None:  # the other machines' ports, reached via the platform
+                        await relay.listen(p for p in cmd["ports"] if not self.cfg.port_range or not self.cfg.port_range[0] <= p <= self.cfg.port_range[1])
+                        continue
                     if "cmd" not in cmd:
                         continue
                     reply = await self._handle_command(cmd)
                     await ws.send(json.dumps({"type": "ack", "id": cmd.get("id"), **reply}))
             finally:
                 pump.cancel()
+                if relay is not None:
+                    await relay.close()
+                self.relay = None
                 self.connected.clear()
 
     async def _channel_loop(self) -> None:
