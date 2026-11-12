@@ -11,6 +11,7 @@ export type EventType =
   | "worker.starting"
   | "worker.online"
   | "worker.down"
+  | "worker.replacement_waiting"
   | "worker.replacement_starting"
   | "worker.replacement_online"
   | "train.step"
@@ -35,6 +36,7 @@ export interface EventPayloads {
   "worker.starting": { layer_start: number; layer_end: number };
   "worker.online": { layer_start: number; layer_end: number; peer_id: string };
   "worker.down": { reason: WorkerDownReason; layer_start: number; layer_end: number };
+  "worker.replacement_waiting": { layer_start: number; layer_end: number };
   "worker.replacement_starting": {
     layer_start: number; layer_end: number; gpu_name: string; gpu_device: "mps" | "cuda"; gpu_class: string; gpu_memory_mb: number;
   };

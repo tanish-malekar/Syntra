@@ -51,6 +51,8 @@ def run_deploy_stage(url, alice, provider, model, log, results, wait):
     results["eval"] = {"base": scores["base"]["valid_json"], "tuned": scores["finetuned"]["valid_json"], "dept": scores["finetuned"]["dept_correct"], "n": scores["n"]}
 
     # --- a serving worker dies: the platform finds another GPU, the endpoint keeps answering -------------------------------
+    assert alice.post(f"/deployments/{base['id']}/stop").status_code == 200  # the pool has no spare GPU until the base model is stopped
+    wait(lambda: len([g for g in alice.get("/gpus").json() if g["status"] == "idle"]) >= 2, 60, "a spare GPU")
     jid = tuned["job"]["id"]
     before = {l["gpu_id"] for l in alice.get(f"/jobs/{jid}").json()["leases"]}
     t_kill = time.monotonic()
@@ -63,8 +65,7 @@ def run_deploy_stage(url, alice, provider, model, log, results, wait):
     assert {l["gpu_id"] for l in new_leases} != before
 
     # --- stop: GPUs return to the pool, the model remains stored ---------------------------------------------------------
-    for d in (tuned, base):
-        assert alice.post(f"/deployments/{d['id']}/stop").status_code == 200
+    assert alice.post(f"/deployments/{tuned['id']}/stop").status_code == 200
     wait(lambda: {g["status"] for g in alice.get("/gpus").json()} == {"idle"}, 120, "all GPUs idle after stopping")
     assert alice.get(f"/models/{model['id']}").json()["deployed"] is False
     costs, earnings = alice.get("/ledger/costs").json(), provider.get("/ledger/earnings").json()

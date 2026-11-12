@@ -329,6 +329,7 @@ class Orchestrator:
         return {"cmd": "start_worker", "worker_id": f"j{run.job_id}-l{lease.id}", "device": gpu.device,
                 "device_index": gpu.device_index, "model": {"name": run.spec.get("worker_model_name") or base.slug,
                 "hf_id": base.hf_id, "path": run.spec.get("worker_model_path", "")},
+                "fetch": ({"model_id": run.spec["finetuned_model_id"]} if run.spec.get("finetuned_model_id") else None),
                 "layer_start": lease.layer_start, "layer_end": lease.layer_end, "dht_prefix": run.prefix,
                 "initial_peers": run.initial_peers, "mode": "train" if run.kind == "train" else "serve", "batch_size": 2}
 
@@ -400,6 +401,9 @@ class Orchestrator:
         if new is None:
             if dead.id not in [d.id for d in run.pending]:
                 run.pending.append(dead)
+                await self._db(lambda s: self.events.publish(
+                    s, EventType.WORKER_REPLACEMENT_WAITING, job_id=run.job_id, user_id=run.owner_id,
+                    payload={"layer_start": dead.layer_start, "layer_end": dead.layer_end}))
             return
         run.pending = [d for d in run.pending if d.id != dead.id]
         run.replacement_leases.add(new.id)

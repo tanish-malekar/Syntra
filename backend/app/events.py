@@ -28,6 +28,7 @@ class EventType(str, Enum):
     WORKER_STARTING = "worker.starting"
     WORKER_ONLINE = "worker.online"
     WORKER_DOWN = "worker.down"
+    WORKER_REPLACEMENT_WAITING = "worker.replacement_waiting"
     WORKER_REPLACEMENT_STARTING = "worker.replacement_starting"
     WORKER_REPLACEMENT_ONLINE = "worker.replacement_online"
     TRAIN_STEP = "train.step"
@@ -51,6 +52,7 @@ PAYLOAD_KEYS: dict[EventType, tuple[str, ...]] = {
     EventType.WORKER_STARTING: ("layer_start", "layer_end"),
     EventType.WORKER_ONLINE: ("layer_start", "layer_end", "peer_id"),
     EventType.WORKER_DOWN: ("reason", "layer_start", "layer_end"),  # reason: exited | heartbeat_timeout | killed_by_user
+    EventType.WORKER_REPLACEMENT_WAITING: ("layer_start", "layer_end"),  # no idle GPU can take over yet
     EventType.WORKER_REPLACEMENT_STARTING: (
         "layer_start", "layer_end", "gpu_name", "gpu_device", "gpu_class", "gpu_memory_mb",
     ),

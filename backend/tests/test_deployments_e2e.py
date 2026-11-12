@@ -149,3 +149,22 @@ def test_deployment_validation_and_stopping_a_queued_one(tmp_path):
             bad = await alice.post("/deployments/1/generate", json={"prompt": "", "max_new_tokens": 9999})
             assert bad.status_code == 422
     run(scenario())
+
+
+def test_a_dead_worker_with_no_free_gpu_is_reported_and_replaced_when_one_frees_up(tmp_path):
+    async def scenario():
+        async with Platform(tmp_path) as p:
+            alice, lab = await p.user("alice"), await p.user("lab")
+            await p.provider(lab, "lab", gpus=3)
+            await wait_for(lambda: asyncio.sleep(0, result=len(p.gpus_sync()) == 3), what="GPUs")
+            tuned = await p.deploy(alice, model_kind="base", base_model_id=1, requested_gpus=2)
+            spare = await p.deploy(alice, model_kind="base", base_model_id=1, requested_gpus=1)   # takes the last GPU
+            jid = tuned["job"]["id"]
+            assert (await alice.post(f"/jobs/{jid}/kill-worker", json={"layer_start": 11})).status_code == 200
+            waiting = (await p.wait_event(alice, jid, "worker.replacement_waiting"))[0]["payload"]
+            assert (waiting["layer_start"], waiting["layer_end"]) == (11, 22)
+            assert (await alice.post(f"/deployments/{spare['id']}/stop")).status_code == 200      # a GPU frees up
+            await p.wait_event(alice, jid, "worker.replacement_online")
+            assert (await alice.post(f"/deployments/{tuned['id']}/generate", json={"prompt": "hi"})).status_code == 200
+            assert (await alice.post(f"/deployments/{tuned['id']}/stop")).status_code == 200
+    run(scenario())

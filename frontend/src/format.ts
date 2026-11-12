@@ -47,6 +47,8 @@ export function describeEvent(e: StoredEvent): TimelineItem | null {
       const why = p.reason === "killed_by_user" ? "you stopped it" : p.reason === "heartbeat_timeout" ? "the GPU stopped answering" : "it exited";
       return { key, ts: e.ts, tone: "bad", title: `A worker went down (${why})`, detail: layersLabel(p.layer_start, p.layer_end) };
     }
+    case "worker.replacement_waiting":
+      return { key, ts: e.ts, tone: "warn", title: "Waiting for a free GPU to take over", detail: `${layersLabel(p.layer_start, p.layer_end)} · it starts as soon as a GPU in the pool is idle` };
     case "worker.replacement_starting":
       return { key, ts: e.ts, tone: "warn", title: `New GPU found: ${p.gpu_name}`,
         detail: `${p.gpu_class} · ${String(p.gpu_device).toUpperCase()} · ${mb(p.gpu_memory_mb)} · taking over ${layersLabel(p.layer_start, p.layer_end)}` };
@@ -81,7 +83,7 @@ export function stageStates(events: StoredEvent[]): Map<number, StageState> {
     if (e.type === "worker.starting" || e.type === "lease.created") states.set(p.layer_start, states.get(p.layer_start) ?? "starting");
     else if (e.type === "worker.online" || e.type === "worker.replacement_online") states.set(p.layer_start, "online");
     else if (e.type === "worker.down") states.set(p.layer_start, "down");
-    else if (e.type === "worker.replacement_starting") states.set(p.layer_start, "replacing");
+    else if (e.type === "worker.replacement_starting" || e.type === "worker.replacement_waiting") states.set(p.layer_start, "replacing");
   }
   return states;
 }

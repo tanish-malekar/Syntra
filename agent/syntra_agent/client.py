@@ -5,12 +5,14 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable, Optional
 
 import httpx
 from websockets.asyncio.client import connect as ws_connect
 
 from syntra_agent import hardware
+from syntra_agent.files import ensure_model_files
 from syntra_agent.hardware import GpuInfo
 from syntra_agent.workers import AgentConfig, WorkerManager, WorkerSpec
 
@@ -121,6 +123,11 @@ class Agent:
                 fresh = {g.index: g for g in await asyncio.to_thread(self.detect)}.get(spec.device_index, gpu)
                 if fresh.busy_external:  # never start on a GPU somebody else is using
                     return {"ok": False, "error": f"GPU {spec.device_index} is busy: {fresh.busy_detail}"}
+                fetch = cmd.get("fetch")
+                if fetch and not (spec.model.get("path") and Path(spec.model["path"]).expanduser().exists()):
+                    dest = Path(self.cfg.models_dir).expanduser() / f"finetuned-{fetch['model_id']}"
+                    assert self._http is not None
+                    spec.model = {**spec.model, "path": str(await ensure_model_files(self._http, fetch["model_id"], dest))}
                 worker = await self.manager.start(spec)
                 return {"ok": True, "pid": worker.proc.pid}
             if name == "kill_worker":
