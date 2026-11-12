@@ -1,3 +1,7 @@
 maya@demo.test demo-maya-pass
 acme@demo.test demo-acme-pass
 alice@demo.test demo-alice-pass
+alice@example.com correct horse battery
+macA@example.com correct horse battery
+macB@example.com correct horse battery
+lab@example.com correct horse battery
