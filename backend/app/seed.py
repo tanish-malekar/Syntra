@@ -13,7 +13,7 @@ from sqlmodel import Session, select
 
 from app.config import BACKEND_DIR, Settings
 from app.db import init_db, make_engine
-from app.models import BaseModel, GpuClass, User
+from app.models import BaseModel, Dataset, GpuClass, User
 from app.security import hash_password
 from app.services.pool import APPLE, DATACENTER, WORKSTATION
 
@@ -26,9 +26,11 @@ GPU_CLASSES = [
 
 # per_layer_memory_mb: measured ~0.6-1.0 GB per half of TinyLlama (11 layers) incl. runtime overhead
 BASE_MODELS = [
-    dict(name="TinyLlama-1.1B-Chat", hf_id="TinyLlama/TinyLlama-1.1B-Chat-v1.0", family="llama",
+    dict(name="TinyLlama-1.1B-Chat", slug="tinyllama", hf_id="TinyLlama/TinyLlama-1.1B-Chat-v1.0", family="llama",
          num_layers=22, hidden_size=2048, per_layer_memory_mb=100),
 ]
+
+SAMPLE_DIR = BACKEND_DIR / "sample_data"
 
 DEV_ACCOUNTS = [
     ("admin@syntra.test", "Admin", True),
@@ -44,6 +46,11 @@ def seed_reference_data(session: Session) -> None:
     for spec in BASE_MODELS:
         if session.exec(select(BaseModel).where(BaseModel.name == spec["name"])).first() is None:
             session.add(BaseModel(**spec))
+    if session.exec(select(Dataset).where(Dataset.builtin == True)).first() is None:  # noqa: E712
+        train = SAMPLE_DIR / "tickets_train.jsonl"
+        rows = len(train.read_text().splitlines()) if train.exists() else 0
+        session.add(Dataset(name="Support tickets (demo)", path=str(train), heldout_path=str(SAMPLE_DIR / "tickets_heldout.jsonl"),
+                            num_rows=rows, builtin=True))
     session.commit()
 
 

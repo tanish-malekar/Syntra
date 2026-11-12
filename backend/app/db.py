@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Request
+from sqlalchemy import event
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -23,12 +24,21 @@ def iso(dt: datetime | None) -> str | None:
 
 
 def make_engine(url: str):
-    kwargs: dict = {"connect_args": {"check_same_thread": False}}
-    if url in ("sqlite://", "sqlite:///:memory:"):
-        kwargs["poolclass"] = StaticPool  # one shared in-memory database (tests)
+    kwargs: dict = {"connect_args": {"check_same_thread": False, "timeout": 30}}
+    in_memory = url in ("sqlite://", "sqlite:///:memory:")
+    if in_memory:
+        kwargs["poolclass"] = StaticPool  # one shared in-memory database: only for simple single-threaded tests
     elif url.startswith("sqlite:///"):
         Path(url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
-    return create_engine(url, **kwargs)
+    engine = create_engine(url, **kwargs)
+    if url.startswith("sqlite") and not in_memory:
+        @event.listens_for(engine, "connect")
+        def _pragmas(dbapi_conn, _):  # concurrent readers + one writer without "database is locked"
+            cur = dbapi_conn.cursor()
+            cur.execute("PRAGMA journal_mode=WAL")
+            cur.execute("PRAGMA busy_timeout=30000")
+            cur.close()
+    return engine
 
 
 def init_db(engine) -> None:

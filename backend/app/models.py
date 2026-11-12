@@ -87,12 +87,26 @@ class Gpu(SQLModel, table=True):
 class BaseModel(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
+    slug: str = ""  # short directory name used for local model files, e.g. "tinyllama"
     hf_id: str
     local_path: str = ""
     family: str = "llama"
     num_layers: int
     hidden_size: int
     per_layer_memory_mb: int  # weights + working memory per layer, from measurements
+
+
+class Dataset(SQLModel, table=True):
+    """Training data: the built-in demo set (owner None) or a user's uploaded JSONL ({"text": ...} per line)."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    owner_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
+    name: str
+    path: str
+    heldout_path: str = ""
+    num_rows: int = 0
+    builtin: bool = False
+    created_at: datetime = Field(default_factory=utcnow)
 
 
 class FineTunedModel(SQLModel, table=True):
@@ -117,6 +131,7 @@ class Job(SQLModel, table=True):
     trusted_only: bool = False
     dataset_path: str = ""
     dht_prefix: str = ""
+    config_json: str = "{}"  # steps, batch size, dataset, ...
     result_json: str = "{}"
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

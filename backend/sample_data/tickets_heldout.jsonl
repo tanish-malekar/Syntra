@@ -1,0 +1,48 @@
+{"prompt": "Ticket: the report download fails with an error. Please fix this asap.\nAnswer:", "department": "bug", "urgency": "high"}
+{"prompt": "Ticket: can you reverse a charge I never approved.\nAnswer:", "department": "billing", "urgency": "low"}
+{"prompt": "Ticket: everything freezes when I open settings.\nAnswer:", "department": "bug", "urgency": "low"}
+{"prompt": "Ticket: the courier marked it delivered but I have nothing.\nAnswer:", "department": "shipping", "urgency": "low"}
+{"prompt": "Ticket: I can't get into my account anymore. This is urgent.\nAnswer:", "department": "login", "urgency": "high"}
+{"prompt": "Ticket: my order still hasn't shown up.\nAnswer:", "department": "shipping", "urgency": "low"}
+{"prompt": "Ticket: I got someone else's package. This is urgent.\nAnswer:", "department": "shipping", "urgency": "high"}
+{"prompt": "Ticket: the app quits as soon as I start a video.\nAnswer:", "department": "bug", "urgency": "low"}
+{"prompt": "Ticket: everything freezes when I open settings. This is urgent.\nAnswer:", "department": "bug", "urgency": "high"}
+{"prompt": "Ticket: my authenticator app codes are rejected.\nAnswer:", "department": "login", "urgency": "low"}
+{"prompt": "Ticket: I never received the sign in email. Please fix this asap.\nAnswer:", "department": "login", "urgency": "high"}
+{"prompt": "Ticket: the login screen says my credentials are invalid. This is urgent.\nAnswer:", "department": "login", "urgency": "high"}
+{"prompt": "Ticket: the app quits as soon as I start a video. I need this resolved immediately.\nAnswer:", "department": "bug", "urgency": "high"}
+{"prompt": "Ticket: the report download fails with an error.\nAnswer:", "department": "bug", "urgency": "low"}
+{"prompt": "Ticket: my order still hasn't shown up. Please fix this asap.\nAnswer:", "department": "shipping", "urgency": "high"}
+{"prompt": "Ticket: the report download fails with an error.\nAnswer:", "department": "bug", "urgency": "low"}
+{"prompt": "Ticket: I never received the sign in email.\nAnswer:", "department": "login", "urgency": "low"}
+{"prompt": "Ticket: I never received the sign in email.\nAnswer:", "department": "login", "urgency": "low"}
+{"prompt": "Ticket: my authenticator app codes are rejected.\nAnswer:", "department": "login", "urgency": "low"}
+{"prompt": "Ticket: a duplicate payment appeared on my bank statement. This is urgent.\nAnswer:", "department": "billing", "urgency": "high"}
+{"prompt": "Ticket: I got someone else's package. I need this resolved immediately.\nAnswer:", "department": "shipping", "urgency": "high"}
+{"prompt": "Ticket: the courier marked it delivered but I have nothing.\nAnswer:", "department": "shipping", "urgency": "low"}
+{"prompt": "Ticket: I can't get into my account anymore.\nAnswer:", "department": "login", "urgency": "low"}
+{"prompt": "Ticket: the app quits as soon as I start a video. This is urgent.\nAnswer:", "department": "bug", "urgency": "high"}
+{"prompt": "Ticket: the box was crushed when it got here.\nAnswer:", "department": "shipping", "urgency": "low"}
+{"prompt": "Ticket: I got someone else's package.\nAnswer:", "department": "shipping", "urgency": "low"}
+{"prompt": "Ticket: a duplicate payment appeared on my bank statement.\nAnswer:", "department": "billing", "urgency": "low"}
+{"prompt": "Ticket: everything freezes when I open settings.\nAnswer:", "department": "bug", "urgency": "low"}
+{"prompt": "Ticket: I get a blank screen after pressing submit. I need this resolved immediately.\nAnswer:", "department": "bug", "urgency": "high"}
+{"prompt": "Ticket: I want my money back for the unused credits. Please fix this asap.\nAnswer:", "department": "billing", "urgency": "high"}
+{"prompt": "Ticket: my authenticator app codes are rejected. This is urgent.\nAnswer:", "department": "login", "urgency": "high"}
+{"prompt": "Ticket: the box was crushed when it got here. Please fix this asap.\nAnswer:", "department": "shipping", "urgency": "high"}
+{"prompt": "Ticket: I want my money back for the unused credits. I need this resolved immediately.\nAnswer:", "department": "billing", "urgency": "high"}
+{"prompt": "Ticket: my order still hasn't shown up. Please fix this asap.\nAnswer:", "department": "shipping", "urgency": "high"}
+{"prompt": "Ticket: I get a blank screen after pressing submit. I need this resolved immediately.\nAnswer:", "department": "bug", "urgency": "high"}
+{"prompt": "Ticket: the courier marked it delivered but I have nothing.\nAnswer:", "department": "shipping", "urgency": "low"}
+{"prompt": "Ticket: my receipt total does not match what I paid. Please fix this asap.\nAnswer:", "department": "billing", "urgency": "high"}
+{"prompt": "Ticket: I get a blank screen after pressing submit. I need this resolved immediately.\nAnswer:", "department": "bug", "urgency": "high"}
+{"prompt": "Ticket: I want my money back for the unused credits. This is urgent.\nAnswer:", "department": "billing", "urgency": "high"}
+{"prompt": "Ticket: a duplicate payment appeared on my bank statement. I need this resolved immediately.\nAnswer:", "department": "billing", "urgency": "high"}
+{"prompt": "Ticket: the login screen says my credentials are invalid. I need this resolved immediately.\nAnswer:", "department": "login", "urgency": "high"}
+{"prompt": "Ticket: the login screen says my credentials are invalid.\nAnswer:", "department": "login", "urgency": "low"}
+{"prompt": "Ticket: can you reverse a charge I never approved.\nAnswer:", "department": "billing", "urgency": "low"}
+{"prompt": "Ticket: my receipt total does not match what I paid. I need this resolved immediately.\nAnswer:", "department": "billing", "urgency": "high"}
+{"prompt": "Ticket: I can't get into my account anymore. Please fix this asap.\nAnswer:", "department": "login", "urgency": "high"}
+{"prompt": "Ticket: my receipt total does not match what I paid.\nAnswer:", "department": "billing", "urgency": "low"}
+{"prompt": "Ticket: can you reverse a charge I never approved. I need this resolved immediately.\nAnswer:", "department": "billing", "urgency": "high"}
+{"prompt": "Ticket: the box was crushed when it got here.\nAnswer:", "department": "shipping", "urgency": "low"}

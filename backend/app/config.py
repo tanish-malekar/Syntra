@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -27,12 +27,29 @@ class Settings:
     heartbeat_timeout_seconds: float = 8.0
     sweep_interval_seconds: float = 2.0
     run_background_tasks: bool = True
+    run_orchestrator: bool = True
+    # --- running real BloomBee jobs -------------------------------------------------------------------
+    bloombee_python: str = ""  # interpreter with torch + hivemind + BloomBee (runs the swarm runner); "" = this one
+    bloombee_dir: str = "~/Desktop/Repos/BloomBee"
+    models_dir: str = str(DATA_DIR / "models_cache")  # local base-model files: <models_dir>/<slug>
+    jobs_dir: str = str(DATA_DIR / "jobs")
+    registry_dir: str = str(DATA_DIR / "registry")  # fine-tuned adapters / merged models
+    datasets_dir: str = str(DATA_DIR / "datasets")
+    dht_port: int = 0  # 0 = random; set a fixed port (and forward it) when agents run on other machines
+    runner_argv: tuple = ()  # tests: replace the real runner with a fake command
+    runner_spec_extra: dict = field(default_factory=dict)  # tests: extra keys merged into the runner spec
+    ready_timeout: float = 900.0
+    orchestrator_interval: float = 1.0
 
     @classmethod
     def from_env(cls) -> "Settings":
         s = cls()
         s.database_url = os.environ.get("SYNTRA_DB", s.database_url)
         s.cookie_secure = _env_bool("SYNTRA_COOKIE_SECURE", s.cookie_secure)
+        s.bloombee_python = os.environ.get("SYNTRA_BLOOMBEE_PYTHON", s.bloombee_python)
+        s.bloombee_dir = os.environ.get("SYNTRA_BLOOMBEE_DIR", s.bloombee_dir)
+        s.models_dir = os.environ.get("SYNTRA_MODELS_DIR", s.models_dir)
+        s.dht_port = int(os.environ.get("SYNTRA_DHT_PORT", s.dht_port))
         origins = os.environ.get("SYNTRA_CORS_ORIGINS")
         if origins:
             s.cors_origins = tuple(o.strip() for o in origins.split(",") if o.strip())

@@ -11,11 +11,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session
 
 from app.agent_hub import AgentHub
-from app.api import agent, agent_ws, auth, events, ledger, pool, providers
+from app.api import agent, agent_ws, auth, events, jobs, ledger, pool, providers
 from app.config import Settings
 from app.db import init_db, make_engine, utcnow
 from app.deps import LoginLimiter
 from app.events import EventService
+from app.services.orchestrator import Orchestrator
 from app.services.pool import sweep_offline
 
 log = logging.getLogger("syntra")
@@ -42,11 +43,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         task = asyncio.create_task(_sweeper(app)) if settings.run_background_tasks else None
+        if settings.run_orchestrator:
+            await app.state.orchestrator.start()
         try:
             yield
         finally:
             if task:
                 task.cancel()
+            await app.state.orchestrator.stop()
 
     app = FastAPI(title="Syntra", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
@@ -54,13 +58,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     init_db(app.state.engine)
     app.state.events = EventService()
     app.state.agent_hub = AgentHub()
+    app.state.orchestrator = Orchestrator(app)
     app.state.login_limiter = LoginLimiter(settings.login_max_failures, settings.login_window_seconds)
 
     app.add_middleware(
         CORSMiddleware, allow_origins=list(settings.cors_origins), allow_credentials=True,
         allow_methods=["*"], allow_headers=["*"],
     )
-    for module in (auth, providers, agent, agent_ws, pool, ledger, events):
+    for module in (auth, providers, agent, agent_ws, pool, ledger, jobs, events):
         app.include_router(module.router)
 
     @app.get("/health", tags=["meta"])

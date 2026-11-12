@@ -1,0 +1,192 @@
+{"text": "Ticket: part of my order is missing from the box.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"low\"}"}
+{"text": "Ticket: my package has not arrived yet. Please fix this asap.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my invoice shows the wrong amount.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: my invoice shows the wrong amount.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: delivery is two weeks late. I need this resolved immediately.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my password reset link has expired. Please fix this asap.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my card was billed after I cancelled. Please fix this asap.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my password reset link has expired. I need this resolved immediately.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the mobile app freezes on the home screen. I need this resolved immediately.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I received the wrong item.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"low\"}"}
+{"text": "Ticket: I need a refund for last month.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: I was charged twice for my subscription.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: two factor login keeps failing. I need this resolved immediately.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the verification code never arrives.\nAnswer: {\"department\": \"login\", \"urgency\": \"low\"}"}
+{"text": "Ticket: I cannot reset my password. Please fix this asap.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my order was delivered to a different address. This is urgent.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my invoice shows the wrong amount. I need this resolved immediately.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I was overcharged for the annual plan. I need this resolved immediately.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I need to change the delivery address. Please fix this asap.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I need to change the delivery address. Please fix this asap.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the app crashes when I upload a photo.\nAnswer: {\"department\": \"bug\", \"urgency\": \"low\"}"}
+{"text": "Ticket: I received the wrong item. Please fix this asap.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the app crashes when I upload a photo. I need this resolved immediately.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I received the wrong item. This is urgent.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the sign in page just spins forever. I need this resolved immediately.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the verification code never arrives. I need this resolved immediately.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I forgot the email I signed up with. This is urgent.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my password reset link has expired.\nAnswer: {\"department\": \"login\", \"urgency\": \"low\"}"}
+{"text": "Ticket: please update the payment method on my account. Please fix this asap.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I need a refund for last month. Please fix this asap.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: delivery is two weeks late. I need this resolved immediately.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: delivery is two weeks late. This is urgent.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the parcel arrived damaged.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"low\"}"}
+{"text": "Ticket: buttons stop responding after the update. Please fix this asap.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my package has not arrived yet.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"low\"}"}
+{"text": "Ticket: my invoice shows the wrong amount.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: I was overcharged for the annual plan.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: notifications are showing twice. This is urgent.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the sign in page just spins forever. This is urgent.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the app crashes when I upload a photo.\nAnswer: {\"department\": \"bug\", \"urgency\": \"low\"}"}
+{"text": "Ticket: the mobile app freezes on the home screen. This is urgent.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the app crashes when I upload a photo.\nAnswer: {\"department\": \"bug\", \"urgency\": \"low\"}"}
+{"text": "Ticket: I was overcharged for the annual plan. I need this resolved immediately.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I was charged twice for my subscription.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: the export feature produces an empty file.\nAnswer: {\"department\": \"bug\", \"urgency\": \"low\"}"}
+{"text": "Ticket: the export feature produces an empty file. Please fix this asap.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I received the wrong item. Please fix this asap.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the sign in page just spins forever. This is urgent.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: part of my order is missing from the box. This is urgent.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the app crashes when I upload a photo. I need this resolved immediately.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my account is locked after too many tries. Please fix this asap.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: two factor login keeps failing. Please fix this asap.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my account is locked after too many tries. This is urgent.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the tracking number shows no updates. Please fix this asap.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I need to change the delivery address. Please fix this asap.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I was overcharged for the annual plan.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: the dashboard will not load any charts. This is urgent.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the sign in page just spins forever. I need this resolved immediately.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: buttons stop responding after the update.\nAnswer: {\"department\": \"bug\", \"urgency\": \"low\"}"}
+{"text": "Ticket: buttons stop responding after the update. Please fix this asap.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: there is an unknown fee on my statement.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: the app crashes when I upload a photo.\nAnswer: {\"department\": \"bug\", \"urgency\": \"low\"}"}
+{"text": "Ticket: my card was billed after I cancelled. I need this resolved immediately.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I need to change the delivery address. I need this resolved immediately.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my card was billed after I cancelled. I need this resolved immediately.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the dashboard will not load any charts. Please fix this asap.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: two factor login keeps failing. Please fix this asap.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the page shows an error when I click save. I need this resolved immediately.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the page shows an error when I click save.\nAnswer: {\"department\": \"bug\", \"urgency\": \"low\"}"}
+{"text": "Ticket: my invoice shows the wrong amount. I need this resolved immediately.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: part of my order is missing from the box.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"low\"}"}
+{"text": "Ticket: the verification code never arrives. I need this resolved immediately.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I received the wrong item. I need this resolved immediately.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I need a refund for last month.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: part of my order is missing from the box. I need this resolved immediately.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the mobile app freezes on the home screen.\nAnswer: {\"department\": \"bug\", \"urgency\": \"low\"}"}
+{"text": "Ticket: my card was billed after I cancelled.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: there is an unknown fee on my statement.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: buttons stop responding after the update. Please fix this asap.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the sign in page just spins forever. Please fix this asap.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I need a refund for last month.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: my account is locked after too many tries. This is urgent.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I am logged out every few minutes. This is urgent.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my package has not arrived yet.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"low\"}"}
+{"text": "Ticket: the tracking number shows no updates. Please fix this asap.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the export feature produces an empty file. Please fix this asap.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: notifications are showing twice. Please fix this asap.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the search returns nothing for any query.\nAnswer: {\"department\": \"bug\", \"urgency\": \"low\"}"}
+{"text": "Ticket: I need a refund for last month. Please fix this asap.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the sign in page just spins forever. This is urgent.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my account is locked after too many tries. Please fix this asap.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the promo code did not apply at checkout.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: the page shows an error when I click save. This is urgent.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the page shows an error when I click save.\nAnswer: {\"department\": \"bug\", \"urgency\": \"low\"}"}
+{"text": "Ticket: buttons stop responding after the update. This is urgent.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: two factor login keeps failing. I need this resolved immediately.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the promo code did not apply at checkout.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: the export feature produces an empty file.\nAnswer: {\"department\": \"bug\", \"urgency\": \"low\"}"}
+{"text": "Ticket: I was charged twice for my subscription. Please fix this asap.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my account is locked after too many tries.\nAnswer: {\"department\": \"login\", \"urgency\": \"low\"}"}
+{"text": "Ticket: I forgot the email I signed up with. I need this resolved immediately.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the promo code did not apply at checkout. I need this resolved immediately.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I forgot the email I signed up with. Please fix this asap.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the parcel arrived damaged.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"low\"}"}
+{"text": "Ticket: my order was delivered to a different address. This is urgent.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the tracking number shows no updates. This is urgent.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the parcel arrived damaged.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"low\"}"}
+{"text": "Ticket: the search returns nothing for any query. I need this resolved immediately.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the tracking number shows no updates. I need this resolved immediately.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: two factor login keeps failing.\nAnswer: {\"department\": \"login\", \"urgency\": \"low\"}"}
+{"text": "Ticket: I am logged out every few minutes. Please fix this asap.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the export feature produces an empty file. This is urgent.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: notifications are showing twice. I need this resolved immediately.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my password reset link has expired. This is urgent.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: delivery is two weeks late. Please fix this asap.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I need a refund for last month.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: the tracking number shows no updates.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"low\"}"}
+{"text": "Ticket: I cannot reset my password.\nAnswer: {\"department\": \"login\", \"urgency\": \"low\"}"}
+{"text": "Ticket: I forgot the email I signed up with.\nAnswer: {\"department\": \"login\", \"urgency\": \"low\"}"}
+{"text": "Ticket: part of my order is missing from the box. I need this resolved immediately.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: please update the payment method on my account. This is urgent.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: two factor login keeps failing.\nAnswer: {\"department\": \"login\", \"urgency\": \"low\"}"}
+{"text": "Ticket: my package has not arrived yet. Please fix this asap.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the dashboard will not load any charts.\nAnswer: {\"department\": \"bug\", \"urgency\": \"low\"}"}
+{"text": "Ticket: delivery is two weeks late.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"low\"}"}
+{"text": "Ticket: I need to change the delivery address. Please fix this asap.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my card was billed after I cancelled. I need this resolved immediately.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my account is locked after too many tries. I need this resolved immediately.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I need to change the delivery address. Please fix this asap.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the verification code never arrives.\nAnswer: {\"department\": \"login\", \"urgency\": \"low\"}"}
+{"text": "Ticket: the search returns nothing for any query.\nAnswer: {\"department\": \"bug\", \"urgency\": \"low\"}"}
+{"text": "Ticket: the page shows an error when I click save.\nAnswer: {\"department\": \"bug\", \"urgency\": \"low\"}"}
+{"text": "Ticket: there is an unknown fee on my statement. This is urgent.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the export feature produces an empty file.\nAnswer: {\"department\": \"bug\", \"urgency\": \"low\"}"}
+{"text": "Ticket: I was charged twice for my subscription.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: I was charged twice for my subscription. I need this resolved immediately.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: there is an unknown fee on my statement. I need this resolved immediately.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: please update the payment method on my account.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: notifications are showing twice. This is urgent.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my order was delivered to a different address. Please fix this asap.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: please update the payment method on my account.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: the parcel arrived damaged.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"low\"}"}
+{"text": "Ticket: please update the payment method on my account. I need this resolved immediately.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the search returns nothing for any query. I need this resolved immediately.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: there is an unknown fee on my statement.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: I was overcharged for the annual plan.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: please update the payment method on my account. I need this resolved immediately.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: buttons stop responding after the update.\nAnswer: {\"department\": \"bug\", \"urgency\": \"low\"}"}
+{"text": "Ticket: the tracking number shows no updates. Please fix this asap.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the parcel arrived damaged.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"low\"}"}
+{"text": "Ticket: my package has not arrived yet.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"low\"}"}
+{"text": "Ticket: the promo code did not apply at checkout. I need this resolved immediately.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I am logged out every few minutes.\nAnswer: {\"department\": \"login\", \"urgency\": \"low\"}"}
+{"text": "Ticket: I received the wrong item. This is urgent.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I was overcharged for the annual plan. I need this resolved immediately.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the dashboard will not load any charts. I need this resolved immediately.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the mobile app freezes on the home screen. This is urgent.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my package has not arrived yet. Please fix this asap.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: there is an unknown fee on my statement.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: the promo code did not apply at checkout.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: notifications are showing twice.\nAnswer: {\"department\": \"bug\", \"urgency\": \"low\"}"}
+{"text": "Ticket: my order was delivered to a different address. I need this resolved immediately.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I was charged twice for my subscription. This is urgent.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the dashboard will not load any charts. I need this resolved immediately.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the dashboard will not load any charts. This is urgent.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my order was delivered to a different address.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"low\"}"}
+{"text": "Ticket: I cannot reset my password. This is urgent.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I am logged out every few minutes.\nAnswer: {\"department\": \"login\", \"urgency\": \"low\"}"}
+{"text": "Ticket: I cannot reset my password. Please fix this asap.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the search returns nothing for any query. This is urgent.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the mobile app freezes on the home screen. I need this resolved immediately.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my card was billed after I cancelled.\nAnswer: {\"department\": \"billing\", \"urgency\": \"low\"}"}
+{"text": "Ticket: the verification code never arrives.\nAnswer: {\"department\": \"login\", \"urgency\": \"low\"}"}
+{"text": "Ticket: the promo code did not apply at checkout. Please fix this asap.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my password reset link has expired. Please fix this asap.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I am logged out every few minutes.\nAnswer: {\"department\": \"login\", \"urgency\": \"low\"}"}
+{"text": "Ticket: the parcel arrived damaged.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"low\"}"}
+{"text": "Ticket: I am logged out every few minutes. Please fix this asap.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the page shows an error when I click save.\nAnswer: {\"department\": \"bug\", \"urgency\": \"low\"}"}
+{"text": "Ticket: notifications are showing twice.\nAnswer: {\"department\": \"bug\", \"urgency\": \"low\"}"}
+{"text": "Ticket: I cannot reset my password. I need this resolved immediately.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I forgot the email I signed up with.\nAnswer: {\"department\": \"login\", \"urgency\": \"low\"}"}
+{"text": "Ticket: my order was delivered to a different address.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"low\"}"}
+{"text": "Ticket: I forgot the email I signed up with.\nAnswer: {\"department\": \"login\", \"urgency\": \"low\"}"}
+{"text": "Ticket: the search returns nothing for any query.\nAnswer: {\"department\": \"bug\", \"urgency\": \"low\"}"}
+{"text": "Ticket: my invoice shows the wrong amount. This is urgent.\nAnswer: {\"department\": \"billing\", \"urgency\": \"high\"}"}
+{"text": "Ticket: my password reset link has expired. This is urgent.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: delivery is two weeks late.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"low\"}"}
+{"text": "Ticket: part of my order is missing from the box. I need this resolved immediately.\nAnswer: {\"department\": \"shipping\", \"urgency\": \"high\"}"}
+{"text": "Ticket: I cannot reset my password. This is urgent.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the verification code never arrives. This is urgent.\nAnswer: {\"department\": \"login\", \"urgency\": \"high\"}"}
+{"text": "Ticket: the mobile app freezes on the home screen. This is urgent.\nAnswer: {\"department\": \"bug\", \"urgency\": \"high\"}"}
