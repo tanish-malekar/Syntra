@@ -22,6 +22,17 @@ Things we decided to do later, parked ideas, and known open issues. Newest chang
   - Leads to check first: upstream branches `train_lm_head` and `train_mlp` in `origin` (unread), and the
     `ptune` code, for how BloomBee already trains parts of a model.
 
+- [ ] Sponsor integrations (Hack Princeton Fall 2026): work out how the sponsors' products could be used inside the platform.
+      Only the sponsors whose products genuinely fit, not all of them. Example from you: Photon for notification alerts
+      (e.g. "training stopped", "worker went down", "replacement online", "training finished").
+  - First step: get the sponsor list and their products/APIs (not looked up yet; nothing here is verified).
+  - Natural hook points already exist: the event stream (`worker.down`, `worker.replacement_online`, `train.completed`,
+    `train.failed`, `gpu.offline`, `deploy.online`). A notifier would subscribe to those and push alerts to the job owner
+    and to providers (e.g. "your GPU was leased", earnings).
+  - Other places a sponsor product might fit (ideas only): model/data storage, auth/payments (we simulate payments),
+    monitoring/logging, hosting the backend at a stable public address, email.
+  - Decide per sponsor: does it earn its place in the product, or is it a gimmick? Keep the demo working without them.
+
 ## Parked optimizations (not needed for the hackathon core)
 - [ ] Log bytes per step split into activations / adapter weights / gradients (cheap; decides everything below).
 - [ ] Adapters only on the last K layers (backward stops early; K slider in the Planner).
