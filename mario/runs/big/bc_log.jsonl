@@ -1,0 +1,28 @@
+{"phase": "bot", "bot_clear_level1": 0.09, "episodes": 100}
+{"phase": "collect", "samples": 20000, "label_counts": [18841, 1159, 0, 0, 0, 0], "seconds": 4.1}
+{"phase": "train", "step": 25, "ce": 0.3643, "value_loss": 2.8282, "acc": 0.906, "seconds": 60.4}
+{"phase": "train", "step": 50, "ce": 0.2244, "value_loss": 3.4467, "acc": 0.938, "seconds": 81.2}
+{"phase": "train", "step": 75, "ce": 0.1577, "value_loss": 3.4176, "acc": 0.938, "seconds": 102.1}
+{"phase": "train", "step": 100, "ce": 0.0591, "value_loss": 2.6501, "acc": 0.969, "seconds": 122.9}
+{"phase": "train", "step": 125, "ce": 0.0183, "value_loss": 3.9283, "acc": 1.0, "seconds": 143.8}
+{"phase": "train", "step": 150, "ce": 0.1022, "value_loss": 3.9464, "acc": 0.938, "seconds": 164.8}
+{"phase": "train", "step": 175, "ce": 0.1538, "value_loss": 4.9262, "acc": 0.938, "seconds": 187.4}
+{"phase": "train", "step": 200, "ce": 0.0626, "value_loss": 3.0869, "acc": 0.969, "seconds": 210.1}
+{"phase": "train", "step": 225, "ce": 0.139, "value_loss": 2.5714, "acc": 0.969, "seconds": 232.0}
+{"phase": "train", "step": 250, "ce": 0.1658, "value_loss": 3.722, "acc": 0.938, "seconds": 254.6}
+{"phase": "train", "step": 275, "ce": 0.0349, "value_loss": 3.7867, "acc": 0.969, "seconds": 275.1}
+{"phase": "train", "step": 300, "ce": 0.0053, "value_loss": 3.0933, "acc": 1.0, "seconds": 296.2}
+{"phase": "train", "step": 325, "ce": 0.0125, "value_loss": 3.9935, "acc": 1.0, "seconds": 316.9}
+{"phase": "train", "step": 350, "ce": 0.1623, "value_loss": 2.7856, "acc": 0.969, "seconds": 337.8}
+{"phase": "train", "step": 375, "ce": 0.2498, "value_loss": 2.6686, "acc": 0.938, "seconds": 358.8}
+{"phase": "train", "step": 400, "ce": 0.0509, "value_loss": 4.0377, "acc": 1.0, "seconds": 379.8}
+{"phase": "train", "step": 425, "ce": 0.001, "value_loss": 3.3883, "acc": 1.0, "seconds": 402.7}
+{"phase": "train", "step": 450, "ce": 0.0862, "value_loss": 2.8696, "acc": 0.969, "seconds": 425.5}
+{"phase": "train", "step": 475, "ce": 0.0067, "value_loss": 3.0425, "acc": 1.0, "seconds": 448.5}
+{"phase": "train", "step": 500, "ce": 0.0456, "value_loss": 2.9328, "acc": 0.969, "seconds": 471.4}
+{"phase": "train", "step": 525, "ce": 0.0019, "value_loss": 2.5982, "acc": 1.0, "seconds": 493.8}
+{"phase": "train", "step": 550, "ce": 0.0147, "value_loss": 5.0972, "acc": 1.0, "seconds": 516.3}
+{"phase": "train", "step": 575, "ce": 0.0502, "value_loss": 2.9519, "acc": 0.969, "seconds": 538.5}
+{"phase": "train", "step": 600, "ce": 0.012, "value_loss": 2.6311, "acc": 1.0, "seconds": 561.2}
+{"phase": "train", "step": 625, "ce": 0.0617, "value_loss": 3.2439, "acc": 0.969, "seconds": 583.8}
+{"phase": "eval", "checkpoint": "warmup", "episodes": 64, "clear": 0.03125, "frac": 0.43221875, "return": 7.0706718749999995, "seconds": 672.9}

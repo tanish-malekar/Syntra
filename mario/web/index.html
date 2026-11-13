@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pip's Run · an LLM learns a platformer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="brand"><span class="logo">▲</span> Pip's Run <span class="sub">a small LLM learns a platformer with RL</span></div>
+  <nav id="modes">
+    <button data-mode="play" class="on">You play</button>
+    <button data-mode="bot">Scripted bot</button>
+    <button data-mode="model">Model plays live</button>
+    <button data-mode="replay">Replay</button>
+  </nav>
+</header>
+<main>
+  <section class="stage">
+    <div class="screen"><canvas id="game" width="416" height="240"></canvas>
+      <div id="overlay" class="overlay"></div>
+    </div>
+    <div class="controls">
+      <label>Level <select id="level"><option value="level1">Level 1</option><option value="gen:3:1">Variant 3</option><option value="gen:11:1">Variant 11</option><option value="gen:5:0">Variant 5 (easy)</option></select></label>
+      <label>Seed <input id="seed" type="number" value="1000001"></label>
+      <label id="ckptWrap">Checkpoint <select id="ckpt"></select></label>
+      <label id="replayWrap">Replay <select id="replay"></select></label>
+      <label>Speed <select id="speed"><option>0.5</option><option selected>1</option><option>2</option><option>4</option></select></label>
+      <button id="go" class="primary">Start ▶</button>
+    </div>
+    <p class="hint" id="hint">Arrow keys / A D to move, Space or ↑ to jump (hold for higher). R restarts.</p>
+  </section>
+  <aside>
+    <div class="card">
+      <h3>What the model sees <span class="muted" id="decision"></span></h3>
+      <pre id="txt">Start a bot, model or replay run to see the text state.</pre>
+    </div>
+    <div class="card">
+      <h3>Move probabilities</h3>
+      <div id="bars"></div>
+    </div>
+    <div class="card stats" id="stats"></div>
+    <div class="card">
+      <h3>Training curves <select id="metric"><option value="eval_clear">Level 1 clear rate (eval)</option><option value="clear">Clear rate (training games)</option><option value="frac">Distance reached</option><option value="return">Episode return</option></select></h3>
+      <canvas id="curve" width="520" height="210"></canvas>
+      <div id="legend" class="legend"></div>
+    </div>
+  </aside>
+</main>
+<script src="/static/sprites.js"></script>
+<script src="/static/game.js"></script>
+</body>
+</html>

@@ -14,3 +14,8 @@ backend/.env.dev
 
 frontend/node_modules/
 frontend/dist/
+
+# mario: local venv and big checkpoints (metrics + replays in mario/runs are committed as the backup demo)
+mario/.venv/
+mario/runs/*/ckpt/
+mario/runs/*/dagger_data.jsonl

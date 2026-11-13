@@ -1,0 +1,6 @@
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  38%|███▊      | 111/290 [00:00<00:00, 1106.99it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 1460.02it/s]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+{"phase": "dagger1", "new_states": 24518, "total_states": 24518, "loss": 0.0074, "no_ok_move": 0, "episodes": 64, "clear": 0.359375, "frac": 0.624203125, "return": 12.155734375, "seconds": 862.9}
+{"phase": "dagger2", "new_states": 17198, "total_states": 41716, "loss": 0.0081, "no_ok_move": 0, "episodes": 64, "clear": 0.484375, "frac": 0.7615156250000001, "return": 15.375609375000002, "seconds": 1756.0}
+{"phase": "dagger3", "new_states": 21906, "total_states": 63622, "loss": 0.0409, "no_ok_move": 0, "episodes": 64, "clear": 0.71875, "frac": 0.8069062500000003, "return": 17.287250000000004, "seconds": 3052.4}
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  41%|████      | 119/290 [00:00<00:00, 1137.76it/s]Loading weights:  91%|█████████▏| 265/290 [00:00<00:00, 1321.92it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 1328.70it/s]

@@ -1,0 +1,2 @@
+{"phase": "pretrain", "new_states": 0, "total_states": 187943, "loss": 0.0036, "episodes": 128, "clear": 0.75, "frac": 0.9156562499999984, "return": 19.58434375, "seconds": 3181.4}
+{"phase": "dagger1", "new_states": 19664, "total_states": 207607, "loss": 0.0064, "no_ok_move": 0, "episodes": 128, "clear": 0.75, "frac": 0.8918828124999986, "return": 19.137781250000007, "seconds": 4634.0}

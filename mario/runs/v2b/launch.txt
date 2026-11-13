@@ -1,0 +1,1 @@
+gpu=2 hours=6.0 cmd=mario.train.dagger --init /data01/tmalekar/mario/init/v2_d3 --first-round 4 --rounds 4 --epochs 2 --episodes 128 --workers 56 --then-ppo '--label '"0.5B: text v2, 7 correction rounds + RL"' --death -30 --flag 45 --mid-start 0.5 --level1-frac 0.9 --envs 96 --lr 1e-5 --ent 0.0 --iters 400 --hours 3 --stop-at 0.97'

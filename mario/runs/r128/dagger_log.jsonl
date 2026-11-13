@@ -1,0 +1,4 @@
+{"phase": "pretrain", "new_states": 0, "total_states": 167056, "loss": 0.0496, "episodes": 128, "clear": 0.75, "frac": 0.8809687499999985, "return": 18.756124999999994, "seconds": 2104.0}
+{"phase": "dagger1", "new_states": 20887, "total_states": 187943, "loss": 0.011, "no_ok_move": 0, "episodes": 128, "clear": 0.8125, "frac": 0.9081484374999985, "return": 19.757257812500004, "seconds": 3430.2}
+{"phase": "dagger2", "new_states": 21972, "total_states": 209915, "loss": 0.0904, "no_ok_move": 0, "episodes": 128, "clear": 0.765625, "frac": 0.9238437499999986, "return": 19.749890625000003, "seconds": 4784.6}
+{"phase": "dagger3", "new_states": 21141, "total_states": 231056, "loss": 0.0052, "no_ok_move": 0, "episodes": 128, "clear": 0.8671875, "frac": 0.9519062499999983, "return": 20.752875000000007, "seconds": 6125.4}

@@ -1,0 +1,1 @@
+gpu=3 hours=7.0 cmd=mario.train.pipeline --model Qwen/Qwen2.5-1.5B-Instruct --mb 32 --rounds 3 --workers 32 --ppo '--label '"Qwen2.5-1.5B: imitation + corrections + RL"' --death -30 --flag 45 --mid-start 0.5 --level1-frac 0.9 --envs 64 --lr 1e-5 --ent 0.0 --iters 400 --hours 4 --stop-at 0.97'

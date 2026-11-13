@@ -1,0 +1,1 @@
+gpu=2 hours=6.0 cmd=mario.train.ppo --label 'RL, Level 1 focus' --init /data01/tmalekar/mario/init/main_it80 --mid-start 0.7 --level1-frac 1.0 --envs 96 --lr 2e-5 --ent 0.0 --seed 1 --iters 400 --hours 5.8 --stop-at 0.97

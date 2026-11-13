@@ -1,0 +1,4 @@
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  33%|███▎      | 95/290 [00:00<00:00, 866.18it/s]Loading weights:  79%|███████▉  | 230/290 [00:00<00:00, 1128.02it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 1160.02it/s]
+{"episodes": 400, "clear": 0.9625, "frac": 0.9809074999999962, "return": 21.870560000000015, "seconds": 556.1}
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  57%|█████▋    | 164/290 [00:00<00:00, 1631.63it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 1653.57it/s]
+{"episodes": 400, "clear": 0.975, "frac": 0.9865424999999962, "return": 22.11140999999998, "seconds": 681.6}

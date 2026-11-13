@@ -1,0 +1,1 @@
+gpu=3 hours=6.0 cmd=mario.train.ppo --label 'RL, death costs more' --init /data01/tmalekar/mario/init/l1_best --death -60 --flag 60 --mid-start 0.5 --level1-frac 1.0 --envs 96 --lr 1e-5 --ent 0.0 --seed 2 --iters 400 --hours 5.8 --stop-at 0.97

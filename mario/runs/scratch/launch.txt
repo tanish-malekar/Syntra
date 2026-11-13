@@ -1,0 +1,1 @@
+gpu=3 hours=8.0 cmd=mario.train.ppo --label 'RL from scratch' --iters 200 --hours 7.5

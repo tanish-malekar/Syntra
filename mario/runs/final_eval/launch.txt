@@ -1,0 +1,1 @@
+gpu=3 hours=1.0 cmd=mario.train.evaluate --checkpoint /data01/tmalekar/mario/init/r128_best97 --episodes 400 --seed-offset 5000 --label best97_indep400

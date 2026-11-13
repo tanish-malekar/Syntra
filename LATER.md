@@ -139,6 +139,22 @@ Things we decided to do later, parked ideas, and known open issues. Newest chang
       served output matches local Hugging Face (8/8); greedy repeatable; sampling works.
 - [x] Clean install on a fresh venv (no pip cache, no Go).
 
+## Pip's Run (mario/) leftovers
+- [ ] Syntra integration: run the Mario RL training as a Syntra job on leased GPUs (the demo is standalone today).
+- [ ] The real NES game (momentum, frame-tight timing, RAM-decoded state) once our own platformer works.
+- [x] Level 1 target reached: 97.5% on 400 unseen seeds (0.5B, rank-128 LoRA, expert corrections + PPO). You stopped
+      further runs at this point (2026-11-13).
+- [ ] Remaining 2.5%: all enemy collisions after the tower (tile ~170), between the first pipes (45-47) and under the
+      coin blocks (141-153). Untried: more correction + PPO cycles from the final model (a cluster job for this was
+      set up and stopped before its first round), longer PPO at lr 3e-6.
+- [ ] Rank-256 adapter: skipped at your request (one context3 attempt died after round 1 at 75%).
+- [ ] Qwen2.5-1.5B: one attempt reached 57% after 2 correction rounds with little training; not pursued.
+- [x] Speed: the shared system-prompt KV is computed once per batch (rollouts 26 s -> 16 s per iteration).
+- [ ] AI cluster: venvs ready in /home/tmalekar/mario-rl (venv = CUDA 12.8 for RTX 8000/H100; venv-v100 = CUDA 12.6
+      for V100). Use fp32 there: fp16 breaks Qwen2.5 and V100s have no bf16.
+- [ ] Old processes of yours on context3 from 11-26 days ago (BloomBee `grad_parity.py`, `train_smoke.py`,
+      `e2e_check.py`, `auto_apply.worker`): not using GPUs, left alone; decide whether to kill them.
+
 ## Changelog
 - 2026-11-12: file created from the planning conversation.
 - 2026-11-12: 2-worker deploy run finished; sampling verified on the served path.
@@ -151,6 +167,8 @@ Things we decided to do later, parked ideas, and known open issues. Newest chang
 - 2026-11-12: QLoRA kept as a later item with the steps needed.
 - 2026-11-12: risk pass: 3 stages and frozen-worker fail-over verified; QLoRA/4-bit found unavailable; Qwen3
   cause not found; memory and step times recorded.
+- 2026-11-12: Pip's Run (mario/): own platformer + Qwen2.5-0.5B trained with PPO on context3 GPUs 2 and 3.
+- 2026-11-13: Pip's Run final model clears Level 1 on 97.5% of 400 unseen seeds; all runs stopped and cleaned up.
 
 ## Laptop lid
 - [x] Agent polls the lid (macOS `AppleClamshellState`, Linux ACPI); on close it reports its GPUs offline and SIGKILLs its workers at once, so the platform replaces them without waiting for a heartbeat timeout. Tested with a simulated lid (agent + real backend).

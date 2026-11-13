@@ -1,0 +1,1 @@
+gpu=1 hours=7.0 cmd=mario.train.ppo --label '0.5B r128: RL continued from 97.5%' --init /data01/tmalekar/mario/init/r128_rl_final --death -30 --flag 45 --mid-start 0.5 --level1-frac 0.9 --envs 160 --lr 3e-6 --target-kl 0.01 --ent 0.0 --eval-every 5 --eval-episodes 128 --iters 400 --hours 6.5 --stop-at 1.01 --save-every 5

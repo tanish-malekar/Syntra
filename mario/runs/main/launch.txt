@@ -1,0 +1,1 @@
+gpu=2 hours=8.0 cmd=mario.train.chain --label 'warm-up + RL' --iters 200 --hours 7.2

@@ -1,0 +1,4 @@
+{"phase": "dagger4", "new_states": 23967, "total_states": 23967, "loss": 0.0206, "no_ok_move": 0, "episodes": 64, "clear": 0.390625, "frac": 0.6431562499999998, "return": 12.5688125, "seconds": 1307.6}
+{"phase": "dagger5", "new_states": 24394, "total_states": 48361, "loss": 0.0244, "no_ok_move": 0, "episodes": 64, "clear": 0.734375, "frac": 0.8845937500000005, "return": 18.762671875000002, "seconds": 2967.7}
+{"phase": "dagger6", "new_states": 26571, "total_states": 74932, "loss": 0.0009, "no_ok_move": 0, "episodes": 64, "clear": 0.765625, "frac": 0.8754687500000006, "return": 18.734874999999995, "seconds": 5282.8}
+{"phase": "dagger7", "new_states": 26938, "total_states": 101870, "loss": 0.0036, "no_ok_move": 0, "episodes": 64, "clear": 0.6875, "frac": 0.8311406250000003, "return": 17.502359374999997, "seconds": 8184.5}

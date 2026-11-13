@@ -1,0 +1,2 @@
+{"phase": "dagger8", "new_states": 20286, "total_states": 122156, "loss": 0.0721, "no_ok_move": 0, "episodes": 128, "clear": 0.7734375, "frac": 0.8835234374999987, "return": 19.0394140625, "seconds": 1917.8}
+{"phase": "dagger9", "new_states": 20770, "total_states": 142926, "loss": 0.0086, "no_ok_move": 0, "episodes": 128, "clear": 0.734375, "frac": 0.8989843749999986, "return": 19.08406250000001, "seconds": 4090.1}

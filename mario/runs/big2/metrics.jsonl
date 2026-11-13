@@ -1,0 +1,4 @@
+{"iter": 0, "eval_clear": 0.46875, "eval_frac": 0.6779140624999996, "seconds": 0}
+{"iter": 1, "pg": -0.0077, "vl": 0.6368, "ent": 0.3508, "kl": 0.0065, "clipfrac": 0.0563, "kl_stop": 1, "rollout_s": 65.0, "iter_s": 138.2, "seconds": 372.6, "samples": 6144, "episodes": 35, "clear": 0.2, "frac": 0.44, "return": 0.917, "clear_level1": 0.0}
+{"iter": 2, "pg": -0.0149, "vl": 0.7668, "ent": 0.2366, "kl": 0.0034, "clipfrac": 0.0234, "kl_stop": 1, "rollout_s": 65.3, "iter_s": 102.1, "seconds": 474.8, "samples": 6144, "episodes": 33, "clear": 0.182, "frac": 0.504, "return": 3.62, "clear_level1": 0.0}
+{"iter": 3, "pg": 0.0012, "vl": 0.8316, "ent": 0.2956, "kl": 0.0049, "clipfrac": 0.0458, "kl_stop": 1, "rollout_s": 65.7, "iter_s": 199.5, "seconds": 674.3, "samples": 6144, "episodes": 35, "clear": 0.371, "frac": 0.622, "return": 7.039, "clear_level1": 0.0}
