@@ -5,3 +5,5 @@ alice@example.com correct horse battery
 macA@example.com correct horse battery
 macB@example.com correct horse battery
 lab@example.com correct horse battery
+macb@demo.test demo-macb-pass
+lab@demo.test demo-lab-pass
