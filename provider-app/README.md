@@ -12,7 +12,7 @@ swift test          # unit tests
 
 | Piece | What it does |
 |---|---|
-| Sign in | `POST /app/pair` with email + password + this Mac's hardware UUID. Returns an agent token for this machine, stored in the login Keychain. Pairing the same Mac again revokes its old token. |
+| Sign in | `POST /app/pair` with email + password + this Mac's hardware UUID. Returns an agent token for this machine, stored in `~/.syntra/app-tokens.json` (mode 0600, like the agent's control secret). Pairing the same Mac again revokes its old token. |
 | Install | First **Share** runs `join.sh --install-only`: Python 3.12 venv, BloomBee and the agent, all in `~/.syntra`. The log goes to `~/.syntra/install.log`. |
 | Share | Starts `python -m syntra_agent --control --relay ...` with the token in the environment (not on the command line). Restarts it after a crash, and gives up after 5 crashes in 2 minutes. |
 | Status | The agent's local control API (`127.0.0.1`, port and secret in `~/.syntra/agent.json`, mode 0600). |

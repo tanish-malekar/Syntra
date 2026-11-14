@@ -98,32 +98,39 @@ struct ControlClient {
     func quit() async throws -> AgentStatus { try await request("POST", "/quit") }
 }
 
-/// The agent token lives in the login Keychain, never in a file.
+/// Where the app keeps this machine's agent token: ~/.syntra/app-tokens.json, readable only by this user (mode 0600),
+/// like the agent's own control secret. (The login Keychain asked for the user's password after every rebuild of an
+/// app that is not distributed through a provisioning profile.) The token is revocable on the website at any time.
 enum Keychain {
-    static let service = "ai.syntra.provider"
+    static var file: URL { FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".syntra/app-tokens.json") }
+
+    private static func readAll() -> [String: String] {
+        guard let data = try? Data(contentsOf: file),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: String] else { return [:] }
+        return obj
+    }
+
+    private static func writeAll(_ all: [String: String]) throws {
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let data = try JSONSerialization.data(withJSONObject: all, options: [.sortedKeys])
+        let tmp = file.appendingPathExtension("tmp")
+        FileManager.default.createFile(atPath: tmp.path, contents: data, attributes: [.posixPermissions: 0o600])
+        _ = try FileManager.default.replaceItemAt(file, withItemAt: tmp)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+    }
 
     static func save(_ value: String, account: String) throws {
-        delete(account: account)
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-                                    kSecAttrAccount as String: account, kSecValueData as String: Data(value.utf8),
-                                    kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
-        let status = SecItemAdd(query as CFDictionary, nil)
-        guard status == errSecSuccess else { throw ClientError.message("Keychain error \(status)") }
+        var all = readAll()
+        all[account] = value
+        try writeAll(all)
     }
 
-    static func load(account: String) -> String? {
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-                                    kSecAttrAccount as String: account, kSecReturnData as String: true,
-                                    kSecMatchLimit as String: kSecMatchLimitOne]
-        var out: AnyObject?
-        guard SecItemCopyMatching(query as CFDictionary, &out) == errSecSuccess, let data = out as? Data else { return nil }
-        return String(decoding: data, as: UTF8.self)
-    }
+    static func load(account: String) -> String? { readAll()[account] }
 
     static func delete(account: String) {
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-                                    kSecAttrAccount as String: account]
-        SecItemDelete(query as CFDictionary)
+        var all = readAll()
+        all.removeValue(forKey: account)
+        try? writeAll(all)
     }
 }
 

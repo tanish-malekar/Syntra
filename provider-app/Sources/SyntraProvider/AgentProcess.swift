@@ -9,6 +9,8 @@ struct InstallLayout {
     var isInstalled: Bool {
         FileManager.default.isExecutableFile(atPath: python.path)
             && FileManager.default.fileExists(atPath: agentDir.appendingPathComponent("syntra_agent/cli.py").path)
+            // an agent installed before the desktop app existed has no control API: treat it as outdated and refresh it
+            && FileManager.default.fileExists(atPath: agentDir.appendingPathComponent("syntra_agent/control.py").path)
             && FileManager.default.fileExists(atPath: bloombeeDir.appendingPathComponent("src/bloombee").path)
     }
     var logFile: URL { home.appendingPathComponent("app-agent.log") }
