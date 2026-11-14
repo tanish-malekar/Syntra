@@ -11,6 +11,9 @@ Fine-tune models on GPUs that people and data centers share, and earn from the G
 - **Preference tuning and RL**: DPO jobs from `{"prompt", "chosen", "rejected"}` data on the Train page (optionally on top
   of an SFT model), and a Python SDK (`sdk/`, `pip install -e sdk`) with Tinker-style primitives and GRPO / PPO / DPO
   loops where your own reward function runs locally. See `sdk/README.md`.
+- **Full fine-tuning (DiLoCo)**: every weight is trained. Each GPU holds the whole model and trains on its share of the data,
+  and the replicas sync every N steps (Nesterov outer step on the averaged updates). A lost replica is replaced and
+  rejoins at the next round. `scripts/e2e_diloco.py` runs it for real on one Mac.
 - Every fine-tuned model is **stored per user**. Come back later, deploy it on N GPUs, try it (greedy or sampling),
   compare it with the base model, and score it on held-out examples.
 - Several users work at once on different GPUs; extra jobs wait in a FIFO queue. Payments are simulated (priced per GPU class).

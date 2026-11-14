@@ -32,6 +32,8 @@ class AgentConfig:
     # semaphore): the platform would wait for it forever. Such workers are killed so the platform replaces them.
     crash_grace: float = 15.0  # seconds after a traceback before a not-yet-online worker is killed
     startup_timeout: float = 1200.0  # a worker not online after this long is killed (weights download included)
+    server: str = ""  # platform URL and this machine's token: DiLoCo replicas fetch weights and upload updates themselves
+    token: str = ""
 
 
 @dataclass
@@ -49,6 +51,9 @@ class WorkerSpec:
     announce_maddr: Optional[str] = None
     batch_size: int = 2
     weight_bits: int = 16  # 16 = float16 base weights; 4 = 4-bit compressed base (QLoRA training / light serving)
+    kind: str = "bloombee"  # bloombee (pipeline stage) | diloco (full fine-tuning replica holding the whole model)
+    job_id: int = 0
+    lease_id: int = 0
     extra_env: dict = field(default_factory=dict)
 
     @classmethod
@@ -68,8 +73,33 @@ def resolve_model(model: dict, cfg: AgentConfig) -> str:
     return model.get("hf_id") or str(local)
 
 
+def build_diloco_command(spec: WorkerSpec, cfg: AgentConfig) -> tuple[list[str], dict]:
+    """A DiLoCo replica: plain torch + transformers (no BloomBee), talks to the platform over HTTP with this machine's token."""
+    if not cfg.server or not cfg.token:
+        raise ValueError("DiLoCo replicas need the platform address and token (set by the agent)")
+    model = resolve_model(spec.model, cfg)
+    argv = [cfg.python, "-m", "syntra_agent.diloco_worker", "--server", cfg.server, "--job", str(spec.job_id),
+            "--lease", str(spec.lease_id), "--model", model, "--device", spec.device,
+            "--work-dir", str(Path(cfg.work_dir).expanduser() / f"diloco-{spec.worker_id}")]
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parent.parent) + os.pathsep + env.get("PYTHONPATH", "")
+    env["SYNTRA_AGENT_TOKEN"] = cfg.token  # environment, not argv: other users cannot read it with ps
+    if spec.device == "cuda":
+        env["CUDA_VISIBLE_DEVICES"] = str(spec.device_index)
+    if cfg.hf_home:
+        env["HF_HOME"] = str(cfg.hf_home)
+    if Path(model).exists():
+        env["HF_HUB_OFFLINE"] = "1"
+    env.update({k: str(v) for k, v in spec.extra_env.items()})
+    return argv, env
+
+
 def build_bloombee_command(spec: WorkerSpec, cfg: AgentConfig) -> tuple[list[str], dict]:
     """The exact run_server flags verified in the fail-over and deploy experiments."""
+    if spec.kind == "diloco":
+        return build_diloco_command(spec, cfg)
+    if spec.kind != "bloombee":
+        raise ValueError(f"unknown worker kind {spec.kind!r}")
     model = resolve_model(spec.model, cfg)
     argv = [
         cfg.python, "-m", "bloombee.cli.run_server", model,

@@ -32,6 +32,7 @@ from app.services.pool import effective_status
 
 log = logging.getLogger("syntra.orchestrator")
 RUNNER = Path(__file__).resolve().parent.parent / "runner" / "swarm_runner.py"
+DILOCO_RUNNER = Path(__file__).resolve().parent.parent / "runner" / "diloco_coordinator.py"
 
 
 class RunnerProc:
@@ -190,11 +191,12 @@ class Orchestrator:
         if Path(model_path).exists():
             run.spec["worker_model_path"] = model_path  # agents on this machine read the files in place
         spec = {**run.spec, "kind": run.kind, "job_id": run.job_id, "dht_prefix": run.prefix, "dht_port": self.settings.dht_port,
-                "num_layers": base.num_layers, "model_path": model_path,
+                "num_layers": base.num_layers, "model_path": model_path, "replicas": job.requested_gpus or 1,
                 "bloombee_dir": self.settings.bloombee_dir, "output_dir": str(job_dir), "ready_timeout": self.settings.ready_timeout,
                 **self.settings.runner_spec_extra}
         (job_dir / "spec.json").write_text(json.dumps(spec, indent=1))
-        argv = list(self.settings.runner_argv) or [self.settings.bloombee_python or sys.executable, str(RUNNER)]
+        script = DILOCO_RUNNER if self._is_diloco(run) else RUNNER
+        argv = list(self.settings.runner_argv) or [self.settings.bloombee_python or sys.executable, str(script)]
         proc = await asyncio.create_subprocess_exec(
             *argv, str(job_dir / "spec.json"), stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT, start_new_session=True)
@@ -339,6 +341,23 @@ class Orchestrator:
             raise RuntimeError(msg.get("error", "generation failed"))
         return msg
 
+    # ---- DiLoCo (full fine-tuning, data parallel) ---------------------------------------------------
+    @staticmethod
+    def _is_diloco(run: JobRun) -> bool:
+        return run.kind == "train" and run.spec.get("method") == "diloco"
+
+    async def _diloco_live(self, run: JobRun) -> None:
+        """Tell the coordinator which replica slots are alive, so a round does not wait for a dead replica."""
+        if not self._is_diloco(run) or run.runner is None:
+            return
+        # every replica with an active lease counts, including one still loading: the round waits for it (up to its deadline)
+        leases = await self._db(lambda s: s.exec(select(Lease).where(Lease.job_id == run.job_id, Lease.ended_at == None)).all())  # noqa: E711
+        slots = sorted({l.layer_start for l in leases})
+        try:
+            await run.runner.send({"op": "replicas", "live": slots})
+        except Exception:
+            pass
+
     # ---- RL sessions -------------------------------------------------------------------------------
     async def call(self, job_id: int, op: str, args: dict, idempotency_key: str | None = None) -> dict:
         """One training-session call (sample, forward_backward, optim_step, ...). Calls run one at a time in the runner.
@@ -433,7 +452,8 @@ class Orchestrator:
                 "fetch": ({"model_id": run.spec["finetuned_model_id"]} if run.spec.get("finetuned_model_id") else None),
                 "layer_start": lease.layer_start, "layer_end": lease.layer_end, "dht_prefix": run.prefix,
                 "initial_peers": run.initial_peers, "mode": "train" if run.kind in ("train", "session") else "serve", "batch_size": 2,
-                "weight_bits": int(run.spec.get("weight_bits", 16))}
+                "weight_bits": int(run.spec.get("weight_bits", 16)),
+                **({"kind": "diloco", "job_id": run.job_id, "lease_id": lease.id} if self._is_diloco(run) else {})}
 
     async def _start_worker(self, run: JobRun, lease: Lease, replacement: bool = False) -> None:
         gpu, base = await self._db(lambda s: (s.get(Gpu, lease.gpu_id), s.get(BaseModel, s.get(Job, run.job_id).base_model_id)))
@@ -480,6 +500,7 @@ class Orchestrator:
         if lease_id in run.online_leases:
             return
         run.online_leases.add(lease_id)
+        await self._diloco_live(run)
         lease, gpu = await self._db(lambda s: (s.get(Lease, lease_id), s.get(Gpu, s.get(Lease, lease_id).gpu_id)))
         payload = {"layer_start": lease.layer_start, "layer_end": lease.layer_end, "peer_id": msg.get("peer_id", "")}
         if lease_id in run.replacement_leases:
@@ -494,6 +515,7 @@ class Orchestrator:
         if lease_id in run.handled_down or run.finished.is_set() or run.cancelled:
             return
         run.handled_down.add(lease_id)
+        run.online_leases.discard(lease_id)
         lease = await self._db(lambda s: s.get(Lease, lease_id))
         run.down_at[lease.layer_start] = time.monotonic()
         await self._db(lambda s: self.events.publish(
@@ -510,9 +532,11 @@ class Orchestrator:
                 await self._db(lambda s: self.events.publish(
                     s, EventType.WORKER_REPLACEMENT_WAITING, job_id=run.job_id, user_id=run.owner_id,
                     payload={"layer_start": dead.layer_start, "layer_end": dead.layer_end}))
+            await self._diloco_live(run)  # the dead replica's lease has ended: the round stops waiting for it
             return
         run.pending = [d for d in run.pending if d.id != dead.id]
         run.replacement_leases.add(new.id)
+        await self._diloco_live(run)
         await self._start_worker(run, new, replacement=True)
 
     async def _retry_pending(self, run: JobRun) -> None:
@@ -622,6 +646,13 @@ class Orchestrator:
         s.add(model); s.commit(); s.refresh(model)
         dest = Path(self.settings.registry_dir).expanduser() / str(model.id) / "adapter"
         dest.parent.mkdir(parents=True, exist_ok=True)
+        if run.result.get("model_dir"):  # full fine-tuning: a complete model, deployable as is (no adapter, no merge)
+            dest = dest.parent / "merged"
+            shutil.rmtree(dest, ignore_errors=True)
+            shutil.move(run.result["model_dir"], dest)
+            model.merged_path = str(dest)
+            s.add(model); s.commit()
+            return model.id
         src = Path(adapter_dir or run.result.get("adapter_dir", ""))
         if src.exists():
             shutil.copytree(src, dest, dirs_exist_ok=True)

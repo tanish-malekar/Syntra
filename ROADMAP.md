@@ -139,7 +139,11 @@ The reward function runs on the user's machine. Only token ids and floats cross 
 - **Rewards that are NaN or inf**: rejected.
 - **Billing**: same lease billing as training, and the session shows its running cost.
 
-## Stage 4: full fine-tuning, DiLoCo style
+## Stage 4: full fine-tuning, DiLoCo style [x] built; real run passed locally; Qwen2.5-0.5B on context3 pending approval
+
+Measured (`scripts/e2e_diloco.py`, this Mac, small Llama with the TinyLlama tokenizer, 2 replicas on 3 simulated GPUs,
+6 rounds of 10 inner steps): loss 9.04 -> 0.90; a replica killed after round 2 was replaced in 4.6 s and reported in every
+later round; the full model landed in the registry (deployable without a merge).
 
 Every replica holds the whole model, with trainable weights and an AdamW inner optimizer, on one GPU. It trains on its own shard for H inner steps. The outer step averages the replicas' pseudo-gradients (Δθ = θ_start − θ_end) and applies Nesterov momentum.
 

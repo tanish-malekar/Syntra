@@ -123,6 +123,13 @@ for step in range(1, int(spec["steps"]) + 1):
     emit({"type": "train.step", "step": step, "loss": round(2.0 / (1 + 0.1 * step), 4), "grad_norm": 1.5, "step_seconds": round(now - last, 3),
           **extra})
     last = now
+if spec.get("method") == "diloco":  # full fine-tuning: the result is a whole model, not an adapter
+    model_dir = Path(spec["output_dir"]) / "model"
+    model_dir.mkdir(parents=True, exist_ok=True)
+    (model_dir / "config.json").write_text(json.dumps({"model_type": "llama"}))
+    (model_dir / "model.safetensors").write_bytes(b"fake-full-model")
+    emit({"type": "train.finished", "returncode": 0, "model_dir": str(model_dir), "tail": []})
+    os._exit(0)
 out = Path(spec["output_dir"]) / "adapter"
 out.mkdir(parents=True, exist_ok=True)
 (out / "adapter_config.json").write_text(json.dumps({"r": spec.get("rank", 8)}))

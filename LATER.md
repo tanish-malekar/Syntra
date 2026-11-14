@@ -11,7 +11,10 @@ Things we decided to do later, parked ideas, and known open issues. Newest chang
 - [x] Verify sampling really varies on the served path. Tuned model: identical samples (very confident);
       base model: three different outputs for three seeds, so `do_sample=True` works on the served path.
 
-- [ ] Full fine-tuning (all weights) as a later training mode, next to LoRA. Much bigger change than QLoRA:
+- [x] Full fine-tuning (all weights): BUILT as DiLoCo data parallelism (ROADMAP.md stage 4); still open: a real-size run
+      (Qwen2.5-0.5B on context3, needs approval), bf16 replicas on CUDA, and sharding a model that does not fit one GPU.
+      Original notes below.
+- [ ] (original note) Full fine-tuning (all weights) as a later training mode, next to LoRA. Much bigger change than QLoRA:
   - Workers are stateless and frozen today; full fine-tuning needs trainable weights, gradients and optimizer state
     on the workers (roughly 16 bytes per parameter with Adam, versus 2 for inference weights), so far less model
     fits per GPU.
@@ -183,6 +186,8 @@ Things we decided to do later, parked ideas, and known open issues. Newest chang
 - 2026-11-13: Pip's Run final model clears Level 1 on 97.5% of 400 unseen seeds; all runs stopped and cleaned up.
 - 2026-11-14: QLoRA (4-bit base) built and measured; provider desktop app (Stage 2 of ROADMAP.md); leaked-semaphore and
   hung-worker fixes.
+- 2026-11-14: Stage 3 (RL: managed DPO, sessions API, `syntra` SDK with GRPO/PPO/DPO) and Stage 4 (DiLoCo full fine-tuning,
+  real local run passed) built.
 
 ## Laptop lid
 - [x] Agent polls the lid (macOS `AppleClamshellState`, Linux ACPI); on close it reports its GPUs offline and SIGKILLs its workers at once, so the platform replaces them without waiting for a heartbeat timeout. Tested with a simulated lid (agent + real backend).

@@ -250,3 +250,17 @@ def test_killing_a_worker_group_spares_the_multiprocessing_resource_tracker(tmp_
             os.killpg(main.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
+
+
+def test_diloco_replica_command_carries_the_lease_and_keeps_the_token_out_of_argv(tmp_path):
+    cfg = AgentConfig(bloombee_dir=tmp_path / "BB", python="/py", models_dir=tmp_path / "m", work_dir=tmp_path,
+                      server="http://platform:8000", token="syn_agent_secret")
+    argv, env = build_bloombee_command(spec(kind="diloco", job_id=7, lease_id=42, device="cuda", device_index=1), cfg)
+    flag = lambda name: argv[argv.index(name) + 1]
+    assert argv[:3] == ["/py", "-m", "syntra_agent.diloco_worker"] and flag("--job") == "7" and flag("--lease") == "42"
+    assert flag("--server") == "http://platform:8000" and "syn_agent_secret" not in " ".join(argv)
+    assert env["SYNTRA_AGENT_TOKEN"] == "syn_agent_secret" and env["CUDA_VISIBLE_DEVICES"] == "1"
+    with pytest.raises(ValueError):
+        build_bloombee_command(spec(kind="diloco"), AgentConfig(work_dir=tmp_path))  # no server/token
+    with pytest.raises(ValueError):
+        build_bloombee_command(spec(kind="mystery"), cfg)

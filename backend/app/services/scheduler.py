@@ -34,13 +34,17 @@ class Eligible:
                          price_per_hour=self.gpu_class.price_per_hour, reliability=self.gpu.reliability, machine=machine)
 
 
+def is_diloco(job: Job) -> bool:
+    return json.loads(job.config_json or "{}").get("method") == "diloco"
+
+
 def weight_bits(job: Job) -> int:
     """16 (float16 base weights) or 4 (4-bit base: QLoRA training, light serving)."""
     return int(json.loads(job.config_json or "{}").get("weight_bits", 16))
 
 
-def model_spec(base: BaseModel, bits: int = 16) -> ModelSpec:
-    return ModelSpec(num_layers=base.num_layers, per_layer_memory_mb=base.per_layer_memory_mb, weight_bits=bits)
+def model_spec(base: BaseModel, bits: int = 16, full_ft: bool = False) -> ModelSpec:
+    return ModelSpec(num_layers=base.num_layers, per_layer_memory_mb=base.per_layer_memory_mb, weight_bits=bits, full_ft=full_ft)
 
 
 def eligible_gpus(session: Session, heartbeat_timeout: float, trusted_only: bool = False,
@@ -67,6 +71,8 @@ def plan_job(session: Session, job: Job, heartbeat_timeout: float) -> Plan | Non
     base = session.get(BaseModel, job.base_model_id)
     bits = weight_bits(job)
     cands = [e.candidate() for e in eligible_gpus(session, heartbeat_timeout, job.trusted_only, need_4bit=bits == 4)]
+    if is_diloco(job):
+        return planner.make_replica_plan(model_spec(base, full_ft=True), cands, job.requested_gpus or 1)
     return planner.make_plan(model_spec(base, bits), cands, job.requested_gpus)
 
 
@@ -171,7 +177,10 @@ def lease_replacement(session: Session, events: EventService, job: Job, dead: Le
         bits = weight_bits(job)
         cands = [e.candidate() for e in eligible_gpus(session, heartbeat_timeout, job.trusted_only, exclude={dead.gpu_id},
                                                       need_4bit=bits == 4)]
-        best = planner.replacement_candidate(model_spec(base, bits), cands, layers)
+        if is_diloco(job):  # a replica holds the whole model; its lease range is only the replica slot
+            best = planner.replacement_candidate(model_spec(base, full_ft=True), cands, base.num_layers)
+        else:
+            best = planner.replacement_candidate(model_spec(base, bits), cands, layers)
         if best is None:
             return None
         gpu = session.get(Gpu, best.gpu_id)

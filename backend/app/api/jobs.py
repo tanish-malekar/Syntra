@@ -131,15 +131,18 @@ class PlanOut(BaseModel):
 
 
 def build_plan(request: Request, session: Session, base_model_id: int, requested_gpus: int | None, trusted_only: bool,
-               weight_bits: int = 16) -> PlanOut:
+               weight_bits: int = 16, method: str = "sft") -> PlanOut:
     base = session.get(BaseModelRow, base_model_id)
     if base is None:
         raise HTTPException(404, "Base model not found")
     timeout = request.app.state.settings.heartbeat_timeout_seconds
     eligible = scheduler.eligible_gpus(session, timeout, trusted_only, need_4bit=weight_bits == 4)
     spec = scheduler.model_spec(base, weight_bits)
+    if method == "diloco":
+        spec = scheduler.model_spec(base, full_ft=True)
     try:
-        plan = planner.make_plan(spec, [e.candidate() for e in eligible], requested_gpus)
+        plan = (planner.make_replica_plan(spec, [e.candidate() for e in eligible], requested_gpus or 1) if method == "diloco"
+                else planner.make_plan(spec, [e.candidate() for e in eligible], requested_gpus))
     except ValueError as exc:
         raise HTTPException(422, str(exc))
     if plan is None:
@@ -154,7 +157,8 @@ def build_plan(request: Request, session: Session, base_model_id: int, requested
         e = by_id[st.gpu_id]
         stages.append(StageOut(gpu_id=e.gpu.id, gpu_name=e.gpu.name, gpu_class=e.gpu_class.name, device=e.gpu.device,
                                provider=e.provider.name, region=e.gpu.region, layer_start=st.layer_start, layer_end=st.layer_end,
-                               memory_needed_mb=planner.stage_memory_mb(spec, st.layers), free_memory_mb=e.gpu.free_memory_mb,
+                               memory_needed_mb=planner.stage_memory_mb(spec, base.num_layers if method == "diloco" else st.layers),
+                               free_memory_mb=e.gpu.free_memory_mb,
                                price_per_hour=e.gpu_class.price_per_hour))
     return PlanOut(fits=True, idle_gpus=len(eligible), stages=stages, hourly_rate=plan.hourly_rate, machines=plan.machines,
                    num_layers=base.num_layers)
@@ -170,12 +174,12 @@ def check_weight_bits(base: BaseModelRow, weight_bits: int) -> None:
 
 @router.get("/plans", response_model=PlanOut)
 def preview_plan(request: Request, base_model_id: int, requested_gpus: int | None = None, trusted_only: bool = False,
-                 weight_bits: int = 16,
+                 weight_bits: int = 16, method: str = "sft",
                  _: User = Depends(current_user), session: Session = Depends(get_session)):
     """What a run would get right now (read-only; nothing is leased)."""
     if weight_bits not in (16, 4):  # a query string never matches Literal[16, 4], so check by hand
         raise HTTPException(422, "weight_bits must be 16 or 4")
-    return build_plan(request, session, base_model_id, requested_gpus, trusted_only, weight_bits)
+    return build_plan(request, session, base_model_id, requested_gpus, trusted_only, weight_bits, method)
 
 
 # --------------------------------------------------------------------------------------------- jobs
@@ -190,7 +194,10 @@ class JobIn(BaseModel):
     lr: float = Field(default=2e-4, gt=0, le=0.01)
     rank: int = Field(default=8, ge=1, le=64)
     weight_bits: Literal[16, 4] = 16  # 4 = QLoRA: the frozen base model is kept in 4-bit on the workers
-    method: Literal["sft", "dpo"] = "sft"  # sft: text data; dpo: preference pairs (prompt, chosen, rejected)
+    method: Literal["sft", "dpo", "diloco"] = "sft"  # sft: LoRA on text; dpo: preference pairs; diloco: full fine-tuning
+    inner_steps: int = Field(default=20, ge=1, le=1000)  # diloco: local steps per replica between synchronizations (H)
+    outer_lr: float = Field(default=0.7, gt=0, le=2)  # diloco: Nesterov outer learning rate (DiLoCo paper: 0.7)
+    outer_momentum: float = Field(default=0.9, ge=0, lt=1)
     beta: float = Field(default=0.1, gt=0, le=5)  # DPO strength (how far the policy may move from the reference)
     init_model_id: int | None = None  # continue from one of your fine-tuned models (e.g. DPO on top of an SFT model)
     name: str = Field(default="", max_length=80)
@@ -274,16 +281,24 @@ async def create_job(body: JobIn, request: Request, user: User = Depends(current
         raise HTTPException(422, f"requested_gpus cannot exceed the model's {base.num_layers} layers")
     check_weight_bits(base, body.weight_bits)
     dataset = visible_dataset(session, body.dataset_id, user)
-    want = "preference" if body.method == "dpo" else "text"
+    want = "preference" if body.method == "dpo" else "text"  # sft and diloco train on text
     if (dataset.format or "text") != want:
         raise HTTPException(422, "DPO needs a preference dataset (prompt, chosen, rejected per line)" if body.method == "dpo"
                             else "Supervised fine-tuning needs a text dataset ({\"text\": ...} per line); use DPO for preference pairs")
+    if body.method == "diloco":
+        if body.weight_bits != 16:
+            raise HTTPException(422, "Full fine-tuning trains every weight: 4-bit base weights are only for LoRA (QLoRA)")
+        if body.init_model_id is not None:
+            raise HTTPException(422, "Full fine-tuning starts from a base model")
+        if body.lr > 1e-3:
+            raise HTTPException(422, "lr is too high for full fine-tuning (use about 1e-5 to 1e-4)")
     start = init_adapter(session, user, base, body.init_model_id)
     config = {"dataset_id": dataset.id, "dataset_path": dataset.path, "heldout_path": dataset.heldout_path, "steps": body.steps,
               "batch_size": body.batch_size, "seq_len": body.seq_len, "lr": body.lr, "rank": body.rank,
               "weight_bits": body.weight_bits, "method": body.method, "beta": body.beta, "init_adapter": start,
-              "init_model_id": body.init_model_id,
-              "model_name": body.name.strip() or f"{base.name} {'DPO' if body.method == 'dpo' else 'fine-tuned'}"}
+              "init_model_id": body.init_model_id, "inner_steps": body.inner_steps, "outer_lr": body.outer_lr,
+              "outer_momentum": body.outer_momentum,
+              "model_name": body.name.strip() or f"{base.name} {({'dpo': 'DPO', 'diloco': 'full fine-tune'}).get(body.method, 'fine-tuned')}"}
     job = Job(owner_id=user.id, kind="train", status="queued", base_model_id=base.id, requested_gpus=body.requested_gpus,
               trusted_only=body.trusted_only, dataset_path=dataset.path, config_json=json.dumps(config))
     session.add(job)
@@ -354,7 +369,7 @@ def model_out(session: Session, m: FineTunedModel) -> ModelOut:
                                                   Deployment.status.in_(["starting", "running"]))).first()
     job = session.get(Job, m.job_id) if m.job_id else None
     cfg = json.loads(job.config_json or "{}") if job else {}
-    method = "session" if job is not None and job.kind == "session" else cfg.get("method", "sft")
+    method = "session" if job is not None and job.kind == "session" else ("full" if cfg.get("method") == "diloco" else cfg.get("method", "sft"))
     return ModelOut(id=m.id, name=m.name, base_model=base.name, base_model_id=base.id, job_id=m.job_id,
                     created_at=iso(m.created_at), scores=json.loads(m.scores_json or "{}"), deployed=live is not None,
                     weight_bits=int(cfg.get("weight_bits", 16)), method=method, parent_model_id=cfg.get("init_model_id"))

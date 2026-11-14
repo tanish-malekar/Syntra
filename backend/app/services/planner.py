@@ -18,6 +18,7 @@ class ModelSpec:
     num_layers: int
     per_layer_memory_mb: int
     weight_bits: int = 16  # 16 = float16 base weights, 4 = 4-bit base (QLoRA training / light serving)
+    full_ft: bool = False  # full fine-tuning replica: trainable weights + gradients + AdamW state (~16 vs 2 bytes per parameter)
 
 
 @dataclass(frozen=True)
@@ -48,7 +49,12 @@ class Plan:
     notes: list[str] = field(default_factory=list)
 
 
+FULL_FT_FACTOR = 8  # fp32 weights (4) + grads (4) + Adam moments (8) = 16 bytes per parameter vs 2 for float16 inference
+
+
 def layer_memory_mb(model: ModelSpec) -> int:
+    if model.full_ft:
+        return model.per_layer_memory_mb * FULL_FT_FACTOR
     return max(1, math.ceil(model.per_layer_memory_mb * WEIGHT_BITS_FRACTION[model.weight_bits]))
 
 
@@ -130,6 +136,19 @@ def make_plan(model: ModelSpec, cands: list[Candidate], requested_gpus: int | No
         if plan is not None:
             return plan
     return None
+
+
+def make_replica_plan(model: ModelSpec, cands: list[Candidate], replicas: int) -> Plan | None:
+    """Data parallelism (DiLoCo): `replicas` GPUs that each hold the whole model. Stage i is replica slot i (layer_start=i):
+    a replacement lease inherits its slot, and with it the dead replica's data shard."""
+    if replicas < 1:
+        raise ValueError("replicas must be at least 1")
+    fitting = [c for c in cands if capacity_layers(model, c.free_memory_mb) >= model.num_layers]
+    chosen = order_candidates(fitting, replicas)[:replicas]
+    if len(chosen) < replicas:
+        return None
+    return Plan(stages=[Stage(c.gpu_id, i, i + 1) for i, c in enumerate(chosen)],
+                hourly_rate=round(sum(c.price_per_hour for c in chosen), 6), machines=len({c.machine for c in chosen}))
 
 
 def replacement_candidate(model: ModelSpec, cands: list[Candidate], layers: int) -> Candidate | None:

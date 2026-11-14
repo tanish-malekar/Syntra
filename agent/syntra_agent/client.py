@@ -65,6 +65,7 @@ class Agent:
         self._lid_detector = lid_detector or hardware.lid_closed
         self.lid_closed = False
         self.relay: Optional[Relay] = None  # set while connected in relay mode
+        cfg.server, cfg.token = settings.server, settings.token  # for DiLoCo replicas, which reach the platform themselves
         self.supports_4bit = supports_4bit(cfg)  # 4-bit base weights (QLoRA); needs a BloomBee with --compress_weight
         # what the desktop app shows
         self.paused = False  # the owner stopped sharing; running work may still be draining

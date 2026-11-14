@@ -73,7 +73,7 @@ export interface EvalScores {
 }
 export interface Model {
   id: number; name: string; base_model: string; base_model_id: number; job_id: number | null; created_at: string;
-  scores: EvalScores; deployed: boolean; weight_bits: WeightBits; method: "sft" | "dpo" | "session"; parent_model_id: number | null;
+  scores: EvalScores; deployed: boolean; weight_bits: WeightBits; method: "sft" | "dpo" | "session" | "full"; parent_model_id: number | null;
 }
 export interface Deployment {
   id: number; model_kind: "base" | "finetuned"; model_name: string; base_model: string; finetuned_model_id: number | null;
@@ -94,7 +94,7 @@ export type WeightBits = 16 | 4;
 export interface JobInput {
   base_model_id: number; dataset_id: number; requested_gpus: number | null; trusted_only: boolean; steps: number;
   batch_size?: number; seq_len?: number; lr?: number; rank?: number; weight_bits?: WeightBits; name?: string;
-  method?: "sft" | "dpo"; beta?: number; init_model_id?: number | null;
+  method?: "sft" | "dpo" | "diloco"; beta?: number; init_model_id?: number | null; inner_steps?: number;
 }
 
 // ---------------------------------------------------------------------------------------------- calls
@@ -124,8 +124,8 @@ export const api = {
     form.append("file", file);
     return request<Dataset>("/datasets", { method: "POST", body: form });
   },
-  plan: (baseModelId: number, requestedGpus: number | null, trustedOnly: boolean, weightBits: WeightBits = 16) => {
-    const q = new URLSearchParams({ base_model_id: String(baseModelId), trusted_only: String(trustedOnly), weight_bits: String(weightBits) });
+  plan: (baseModelId: number, requestedGpus: number | null, trustedOnly: boolean, weightBits: WeightBits = 16, method = "sft") => {
+    const q = new URLSearchParams({ base_model_id: String(baseModelId), trusted_only: String(trustedOnly), weight_bits: String(weightBits), method });
     if (requestedGpus) q.set("requested_gpus", String(requestedGpus));
     return get<Plan>(`/plans?${q}`);
   },
