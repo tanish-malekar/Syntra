@@ -5,7 +5,7 @@ import sys
 
 import pytest
 
-from syntra_agent.workers import AgentConfig, WorkerManager, WorkerSpec, build_bloombee_command, resolve_model
+from syntra_agent.workers import AgentConfig, WorkerManager, WorkerSpec, build_bloombee_command, resolve_model, supports_4bit
 from pathlib import Path
 
 FAKE_WORKER = Path(__file__).resolve().parent / "fake_worker.py"
@@ -51,6 +51,28 @@ def test_bloombee_command_for_serving_on_mps_with_local_model(tmp_path):
     assert argv[3] == str(tmp_path / "models" / "tinyllama") and env["HF_HUB_OFFLINE"] == "1"
     assert env["BLOOMBEE_ENABLE_LORA"] == "0" and "CUDA_VISIBLE_DEVICES" not in env
     assert resolve_model({"name": "missing", "hf_id": "a/b"}, cfg) == "a/b"
+
+
+def test_4bit_base_weights_add_the_compress_flag_and_other_widths_are_refused(tmp_path):
+    cfg = AgentConfig(bloombee_dir=tmp_path / "BB", models_dir=tmp_path / "models")
+    assert "--compress_weight" not in build_bloombee_command(spec(), cfg)[0]
+    assert "--compress_weight" in build_bloombee_command(spec(weight_bits=4), cfg)[0]
+    assert "--compress_weight" in build_bloombee_command(spec(weight_bits=4, mode="serve"), cfg)[0]
+    s = WorkerSpec.from_command({**spec().__dict__, "weight_bits": 4})
+    assert s.weight_bits == 4
+    with pytest.raises(ValueError):
+        build_bloombee_command(spec(weight_bits=8), cfg)
+
+
+def test_4bit_support_is_read_from_the_bloombee_checkout(tmp_path):
+    cfg = AgentConfig(bloombee_dir=tmp_path / "BB")
+    assert supports_4bit(cfg) is False                         # no checkout at all
+    cli = tmp_path / "BB" / "src" / "bloombee" / "cli" / "run_server.py"
+    cli.parent.mkdir(parents=True)
+    cli.write_text("parser.add_argument('--quant_type')\n")
+    assert supports_4bit(cfg) is False                         # an older BloomBee
+    cli.write_text("parser.add_argument('--compress_weight', action='store_true')\n")
+    assert supports_4bit(cfg) is True
 
 
 def test_spec_from_command_ignores_unknown_keys():
@@ -163,3 +185,68 @@ def test_hanging_driver_does_not_block_the_agent():
         assert await agent.detect_now(2) is not None  # the slow probe's result is picked up
 
     asyncio.run(run())
+
+
+def test_a_worker_that_crashes_while_starting_and_hangs_is_killed_and_reported(tmp_path):
+    async def scenario():
+        events: list = []
+        async def on_event(e): events.append(e)
+        m = WorkerManager(AgentConfig(work_dir=tmp_path, crash_grace=0.3), on_event, fake_builder(["--crash-and-hang"]))
+        await m.start(spec())
+        await collect(events, "worker.exited")
+        exited = next(e for e in events if e["type"] == "worker.exited")
+        assert exited["reason"] == "failed_to_start" and "No space left on device" in exited["error"]
+        assert not any(e["type"] == "worker.online" for e in events) and m.pids() == []
+        await m.stop_all()
+    asyncio.run(scenario())
+
+
+def test_a_worker_that_never_comes_online_is_killed_after_the_startup_timeout(tmp_path):
+    async def scenario():
+        events: list = []
+        async def on_event(e): events.append(e)
+        m = WorkerManager(AgentConfig(work_dir=tmp_path, startup_timeout=0.5), on_event, fake_builder(["--never-online"]))
+        await m.start(spec())
+        await collect(events, "worker.exited")
+        exited = next(e for e in events if e["type"] == "worker.exited")
+        assert exited["reason"] == "failed_to_start" and "not online" in exited["error"]
+        await m.stop_all()
+    asyncio.run(scenario())
+
+
+def test_killing_a_worker_group_spares_the_multiprocessing_resource_tracker(tmp_path):
+    """macOS leaks named semaphores until reboot if the resource_tracker dies with its parent (kern.posix.sem.max)."""
+    import os
+    import signal
+    import subprocess
+    import time
+    from syntra_agent.workers import group_members, kill_process_group
+    # a "worker" that starts a helper named like the tracker in its own group
+    code = ("import subprocess, sys, time;"
+            "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)', 'multiprocessing.resource' + '_tracker']);"
+            "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)', 'p2pd']);"
+            "time.sleep(30)")
+    main = subprocess.Popen([sys.executable, "-c", code], start_new_session=True)
+    try:
+        deadline = time.time() + 10
+        while len(group_members(main.pid)) < 3 and time.time() < deadline:
+            time.sleep(0.05)
+        members = dict(group_members(main.pid))
+        tracker = next(pid for pid, cmd in members.items() if "multiprocessing.resource_tracker" in cmd)
+        helper = next(pid for pid, cmd in members.items() if "p2pd" in cmd)
+        kill_process_group(main.pid)
+        main.wait(5)
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            try:
+                os.kill(helper, 0)
+                time.sleep(0.05)
+            except ProcessLookupError:
+                break
+        alive = lambda pid: subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True).stdout.strip() not in ("", "Z")
+        assert not alive(helper) and alive(tracker)
+    finally:
+        try:
+            os.killpg(main.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass

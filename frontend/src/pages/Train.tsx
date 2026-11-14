@@ -1,11 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, type BaseModel, type Dataset, type Plan } from "../api";
+import { api, type BaseModel, type Dataset, type Plan, type WeightBits } from "../api";
 import { ErrorBox } from "../components/ui";
 import { layersLabel, mb, money } from "../format";
 import { useOnEvent } from "../state";
 
 const PALETTE = ["#2459d6", "#14804a", "#b4690e", "#8b3fb8", "#c1272d", "#0b7a85"];
+
+/** Float16 or 4-bit base weights on the workers. Used for training (QLoRA) and for deployments. */
+export function WeightBitsField({ value, onChange, name, purpose }: { value: WeightBits; onChange: (v: WeightBits) => void; name: string; purpose: "train" | "deploy" }) {
+  return (
+    <div className="field">
+      <span className="label">Base model weights</span>
+      <label><input type="radio" name={name} checked={value === 16} onChange={() => onChange(16)} /> Full precision (float16)</label>
+      <label><input type="radio" name={name} checked={value === 4} onChange={() => onChange(4)} /> 4-bit{purpose === "train" ? " (QLoRA)" : ""}</label>
+      <div className="hint">
+        {purpose === "train"
+          ? "4-bit keeps the frozen model in about a third of the GPU memory, so it fits on fewer or smaller GPUs. Steps are slower and results can be slightly less accurate. Only GPUs whose agent supports 4-bit are used."
+          : "4-bit serves the model in about a third of the GPU memory; answers can differ slightly from float16."}
+      </div>
+    </div>
+  );
+}
 
 export function PlanView({ plan, requested }: { plan: Plan; requested: number | null }) {
   if (!plan.fits) {
@@ -55,6 +71,7 @@ export default function TrainPage() {
   const [gpuCount, setGpuCount] = useState(2);
   const [trustedOnly, setTrustedOnly] = useState(false);
   const [steps, setSteps] = useState(60);
+  const [weightBits, setWeightBits] = useState<WeightBits>(16);
   const [name, setName] = useState("");
   const [plan, setPlan] = useState<Plan | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -71,9 +88,9 @@ export default function TrainPage() {
   const requested = auto ? null : gpuCount;
   const refresh = () => {
     if (baseId === null) return;
-    api.plan(baseId, requested, trustedOnly).then((p) => { setPlan(p); setError(null); }).catch((e) => { setPlan(null); setError(e.message); });
+    api.plan(baseId, requested, trustedOnly, weightBits).then((p) => { setPlan(p); setError(null); }).catch((e) => { setPlan(null); setError(e.message); });
   };
-  useEffect(() => { const t = setTimeout(refresh, 250); return () => clearTimeout(t); }, [baseId, requested, trustedOnly]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const t = setTimeout(refresh, 250); return () => clearTimeout(t); }, [baseId, requested, trustedOnly, weightBits]); // eslint-disable-line react-hooks/exhaustive-deps
   useOnEvent((e) => { if (e.type === "gpu.registered" || e.type === "gpu.offline" || e.type === "gpu.busy_external" || e.type === "lease.created") refresh(); });
 
   const upload = async () => {
@@ -93,7 +110,7 @@ export default function TrainPage() {
     if (baseId === null || datasetId === null) return;
     setBusy(true); setError(null);
     try {
-      const job = await api.createJob({ base_model_id: baseId, dataset_id: datasetId, requested_gpus: requested, trusted_only: trustedOnly, steps, name: name.trim() || undefined });
+      const job = await api.createJob({ base_model_id: baseId, dataset_id: datasetId, requested_gpus: requested, trusted_only: trustedOnly, steps, weight_bits: weightBits, name: name.trim() || undefined });
       nav(`/runs/${job.id}`);
     } catch (e) { setError((e as Error).message); setBusy(false); }
   };
@@ -143,6 +160,7 @@ export default function TrainPage() {
           </div>
           <label><input type="checkbox" checked={trustedOnly} onChange={(e) => setTrustedOnly(e.target.checked)} /> Trusted GPUs only (verified providers)</label>
           <div className="hint">Providers can see the data their GPUs process. Use this for anything sensitive.</div>
+          <WeightBitsField value={weightBits} onChange={setWeightBits} name="train-bits" purpose="train" />
         </div>
       </div>
       <div className="card stack">

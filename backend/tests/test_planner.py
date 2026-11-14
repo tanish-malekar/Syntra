@@ -97,3 +97,18 @@ def test_replacement_candidate_needs_enough_memory_and_picks_the_best():
     assert replacement_candidate(TINY, cands, layers=11).gpu_id == 3
     assert replacement_candidate(TINY, [cand(1, free=600)], layers=11) is None
     assert replacement_candidate(TINY, [], layers=11) is None
+
+
+QLORA = ModelSpec(num_layers=22, per_layer_memory_mb=100, weight_bits=4)
+
+
+def test_4bit_layers_need_about_a_third_of_the_memory():
+    # 30 MB per layer, plus one float16 layer (100 MB) of working space on top of the runtime overhead
+    assert stage_memory_mb(QLORA, 11) == 11 * 30 + RUNTIME_OVERHEAD_MB + 100
+    assert capacity_layers(QLORA, 1500) == 30 and capacity_layers(QLORA, 600) == 0
+
+
+def test_4bit_fits_a_model_on_fewer_gpus():
+    laptops = [cand(i, free=1300, machine=i) for i in range(4)]  # 8 float16 layers each, 23 in 4-bit
+    assert len(make_plan(TINY, laptops).stages) == 3
+    assert len(make_plan(QLORA, laptops).stages) == 1

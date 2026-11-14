@@ -195,3 +195,38 @@ def test_job_validation_datasets_and_plan_preview(tmp_path):
             assert (await alice.post(f"/jobs/{job['id']}/cancel")).status_code == 200
             assert (await p.job(alice, job["id"]))["status"] == "stopped"
     run(scenario())
+
+
+def test_qlora_trains_and_deploys_with_4bit_base_weights_on_capable_agents_only(tmp_path):
+    async def scenario():
+        async with Platform(tmp_path, runner_spec_extra={"fake_step_delay": 0.05}) as p:
+            alice, bob, carol = await p.user("alice"), await p.user("bob"), await p.user("carol")
+            await p.provider(bob, "bob-old", gpus=2)                       # agent without 4-bit support
+            await wait_for(lambda: asyncio.sleep(0, result=len(p.gpus_sync()) == 2), what="2 GPUs registered")
+            base = {"base_model_id": 1, "dataset_id": 1}
+            assert (await alice.post("/jobs", json={**base, "weight_bits": 8})).status_code == 422
+            preview = (await alice.get("/plans", params={"base_model_id": 1, "weight_bits": 4})).json()
+            assert preview["fits"] is False and "4-bit" in preview["reason"]
+
+            await p.provider(carol, "carol-new", gpus=2, supports_4bit=True)
+            await wait_for(lambda: asyncio.sleep(0, result=len(p.gpus_sync()) == 4), what="4 GPUs registered")
+            assert sum(g.supports_4bit for g in p.gpus_sync()) == 2
+            preview = (await alice.get("/plans", params={"base_model_id": 1, "weight_bits": 4})).json()
+            assert preview["fits"] and len(preview["stages"]) == 1           # the whole model fits one GPU in 4-bit
+
+            model = await p.train_model(alice, steps=4, weight_bits=4, requested_gpus=2)
+            assert model["weight_bits"] == 4
+            train_specs = [s for s in p.worker_specs if s.mode == "train"]
+            assert len(train_specs) == 2 and {s.weight_bits for s in train_specs} == {4}
+            carol_ids = {g.id for g in p.gpus_sync() if g.supports_4bit}
+            job = await p.job(alice, model["job_id"])
+            assert job["config"]["weight_bits"] == 4 and {l["gpu_id"] for l in job["leases"]} == carol_ids
+
+            # deploy the QLoRA model in 4-bit, and the base model in float16
+            dep = await p.deploy(alice, model_kind="finetuned", finetuned_model_id=model["id"], requested_gpus=1, weight_bits=4)
+            assert dep["weight_bits"] == 4
+            assert [s.weight_bits for s in p.worker_specs if s.mode == "serve"] == [4]
+            base_dep = await p.deploy(alice, model_kind="base", base_model_id=1, requested_gpus=1)
+            assert base_dep["weight_bits"] == 16
+            assert [s.weight_bits for s in p.worker_specs if s.mode == "serve"] == [4, 16]
+    run(scenario())

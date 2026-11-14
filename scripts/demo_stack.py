@@ -65,6 +65,7 @@ async def serve() -> None:
         agent = Agent(AgentSettings(server=url, token=token, region=name.split()[0].lower(), heartbeat_interval=1.0, simulated=True,
                                     sim_count=gpus, sim_memory_gb=mem / 1024), cfg, detector=lambda: [GpuInfo(0, chip, device, mem * gpus, mem * gpus)], manager=mgr)
         mgr.on_event = agent._on_worker_event
+        agent.supports_4bit = True  # the fake swarm accepts 4-bit (QLoRA) jobs too
         asyncio.create_task(agent.run())
         return pid
 

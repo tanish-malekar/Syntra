@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import uuid
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
@@ -110,19 +111,22 @@ class PlanOut(BaseModel):
     num_layers: int = 0
 
 
-def build_plan(request: Request, session: Session, base_model_id: int, requested_gpus: int | None, trusted_only: bool) -> PlanOut:
+def build_plan(request: Request, session: Session, base_model_id: int, requested_gpus: int | None, trusted_only: bool,
+               weight_bits: int = 16) -> PlanOut:
     base = session.get(BaseModelRow, base_model_id)
     if base is None:
         raise HTTPException(404, "Base model not found")
     timeout = request.app.state.settings.heartbeat_timeout_seconds
-    eligible = scheduler.eligible_gpus(session, timeout, trusted_only)
-    spec = scheduler.model_spec(base)
+    eligible = scheduler.eligible_gpus(session, timeout, trusted_only, need_4bit=weight_bits == 4)
+    spec = scheduler.model_spec(base, weight_bits)
     try:
         plan = planner.make_plan(spec, [e.candidate() for e in eligible], requested_gpus)
     except ValueError as exc:
         raise HTTPException(422, str(exc))
     if plan is None:
         why = (f"Not enough idle GPUs for {requested_gpus} stages" if requested_gpus else "No set of idle GPUs can hold this model")
+        if weight_bits == 4:
+            why += " (4-bit needs GPUs whose agent supports it)"
         return PlanOut(fits=False, reason=why + " right now; the run would wait in the queue.", idle_gpus=len(eligible),
                        num_layers=base.num_layers)
     by_id = {e.gpu.id: e for e in eligible}
@@ -137,11 +141,22 @@ def build_plan(request: Request, session: Session, base_model_id: int, requested
                    num_layers=base.num_layers)
 
 
+FOUR_BIT_FAMILIES = ("llama",)  # BloomBee's 4-bit weight path is implemented for Llama-family blocks only
+
+
+def check_weight_bits(base: BaseModelRow, weight_bits: int) -> None:
+    if weight_bits == 4 and base.family not in FOUR_BIT_FAMILIES:
+        raise HTTPException(422, f"4-bit base weights are not available for {base.family} models yet")
+
+
 @router.get("/plans", response_model=PlanOut)
 def preview_plan(request: Request, base_model_id: int, requested_gpus: int | None = None, trusted_only: bool = False,
+                 weight_bits: int = 16,
                  _: User = Depends(current_user), session: Session = Depends(get_session)):
     """What a run would get right now (read-only; nothing is leased)."""
-    return build_plan(request, session, base_model_id, requested_gpus, trusted_only)
+    if weight_bits not in (16, 4):  # a query string never matches Literal[16, 4], so check by hand
+        raise HTTPException(422, "weight_bits must be 16 or 4")
+    return build_plan(request, session, base_model_id, requested_gpus, trusted_only, weight_bits)
 
 
 # --------------------------------------------------------------------------------------------- jobs
@@ -155,6 +170,7 @@ class JobIn(BaseModel):
     seq_len: int = Field(default=128, ge=32, le=512)
     lr: float = Field(default=2e-4, gt=0, le=0.01)
     rank: int = Field(default=8, ge=1, le=64)
+    weight_bits: Literal[16, 4] = 16  # 4 = QLoRA: the frozen base model is kept in 4-bit on the workers
     name: str = Field(default="", max_length=80)
 
 
@@ -220,10 +236,11 @@ async def create_job(body: JobIn, request: Request, user: User = Depends(current
         raise HTTPException(404, "Base model not found")
     if body.requested_gpus is not None and body.requested_gpus > base.num_layers:
         raise HTTPException(422, f"requested_gpus cannot exceed the model's {base.num_layers} layers")
+    check_weight_bits(base, body.weight_bits)
     dataset = visible_dataset(session, body.dataset_id, user)
     config = {"dataset_id": dataset.id, "dataset_path": dataset.path, "heldout_path": dataset.heldout_path, "steps": body.steps,
               "batch_size": body.batch_size, "seq_len": body.seq_len, "lr": body.lr, "rank": body.rank,
-              "model_name": body.name.strip() or f"{base.name} fine-tuned"}
+              "weight_bits": body.weight_bits, "model_name": body.name.strip() or f"{base.name} fine-tuned"}
     job = Job(owner_id=user.id, kind="train", status="queued", base_model_id=base.id, requested_gpus=body.requested_gpus,
               trusted_only=body.trusted_only, dataset_path=dataset.path, config_json=json.dumps(config))
     session.add(job)
@@ -283,14 +300,18 @@ class ModelOut(BaseModel):
     created_at: str
     scores: dict
     deployed: bool
+    weight_bits: int  # base-weight precision the model was trained with (4 = QLoRA)
 
 
 def model_out(session: Session, m: FineTunedModel) -> ModelOut:
     base = session.get(BaseModelRow, m.base_model_id)
     live = session.exec(select(Deployment).where(Deployment.finetuned_model_id == m.id,
                                                   Deployment.status.in_(["starting", "running"]))).first()
+    job = session.get(Job, m.job_id) if m.job_id else None
+    bits = int(json.loads(job.config_json or "{}").get("weight_bits", 16)) if job else 16
     return ModelOut(id=m.id, name=m.name, base_model=base.name, base_model_id=base.id, job_id=m.job_id,
-                    created_at=iso(m.created_at), scores=json.loads(m.scores_json or "{}"), deployed=live is not None)
+                    created_at=iso(m.created_at), scores=json.loads(m.scores_json or "{}"), deployed=live is not None,
+                    weight_bits=bits)
 
 
 @router.get("/models", response_model=list[ModelOut])

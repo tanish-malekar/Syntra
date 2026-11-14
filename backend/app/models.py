@@ -54,6 +54,7 @@ class AgentToken(SQLModel, table=True):
     provider_id: int = Field(foreign_key="provider.id", index=True)
     token_hash: str = Field(index=True, unique=True)
     label: str = ""
+    machine_id: str = Field(default="", index=True)  # set when paired from the desktop app: one live token per machine
     created_at: datetime = Field(default_factory=utcnow)
     last_used_at: Optional[datetime] = None
     revoked: bool = False
@@ -81,6 +82,7 @@ class Gpu(SQLModel, table=True):
     last_heartbeat: Optional[datetime] = None
     reliability: float = 1.0
     simulated: bool = False
+    supports_4bit: bool = False  # the agent's BloomBee can keep base weights in 4-bit (--compress_weight)
     created_at: datetime = Field(default_factory=utcnow)
 
 

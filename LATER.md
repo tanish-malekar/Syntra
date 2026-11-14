@@ -77,16 +77,28 @@ Things we decided to do later, parked ideas, and known open issues. Newest chang
         replacement on this network unless model files are cached near the GPU.
   - [ ] The scripts' "replacement online" time is unreliable (a stale DHT record of the dead worker looks ONLINE);
         trust the "first step / generation resumed" times instead.
-- [ ] QLoRA / 4-bit (planned for later): NOT available today. The README says `--quant_type nf4`, but the flag accepts
-      only NONE/INT8 and INT8 is implemented only for DeepSeek-V3 experts. Treat the README claim as stale.
-  - FlexGen already has 4-bit group-wise weight compression (policy `compress_weight`, `comp_weight_config`
-    num_bits=4, group_size=64; compressed-weight decompress branches in `pytorch_backend.py`), but `server.py:329`
-    hardcodes `compress_weight=False` and there is no CLI flag.
-  - [ ] Add a flag to turn it on; check the LoRA path (`lora_linear(... w_q.data ...)`) works with compressed weights.
-  - [ ] Verify gradients against a reference with a quantized base, and the accuracy loss on the ticket task.
-  - [ ] Check it on MPS (device-agnostic ops?) and CUDA; bitsandbytes is CUDA-only, so don't depend on it.
-  - [ ] Deploy path: you cannot merge an adapter into a 4-bit base; either merge into FP16 then re-quantize, or
-        serve the quantized base with the adapter separately.
+- [~] QLoRA / 4-bit: BUILT (BloomBee branch `qlora-4bit`: `--compress_weight` = FlexGen 4-bit group quantization, groups of 64).
+  - [x] Flag on the worker; the Llama path decompresses each layer before `lora_linear`; LoRA backward keeps only the compressed
+        handle (`_FrozenCompressedLinear`), otherwise autograd kept every layer's float16 copy and 4-bit used MORE memory than FP16.
+  - [x] Loss parity on this Mac (TinyLlama, 2 workers, 15 steps, same seed): 4-bit 2.10 -> 1.66, FP16 2.14 -> 1.69.
+  - [x] Memory per worker (11 layers): idle 0.6-0.9 GB vs 1.4-1.7 GB FP16; GPU memory during training ~360 MB vs ~1150 MB
+        (the allocator cache is released after each backward once it exceeds `BLOOMBEE_QLORA_CACHE_SLACK_MB`, default 256).
+  - [x] Step time: ~2x slower than FP16 on MPS (decompression + cache release; 4.3 s without release vs 6.5 s with, FP16 2.8 s).
+  - [x] Platform: `weight_bits` on jobs and deployments, planner memory model, only 4-bit-capable agents, UI toggles.
+  - [x] Deploy: the adapter is merged into float16 (as before); the user picks float16 or 4-bit serving.
+  - [ ] Real end-to-end run (`WEIGHT_BITS=4 DEPLOY_BITS=4 scripts/e2e_real.py full`): blocked on this Mac until a reboot
+        (leaked POSIX semaphores, see below). 4-bit SERVING has not run on real hardware yet.
+  - [ ] Accuracy on the held-out ticket task vs FP16 LoRA (48/48).
+  - [ ] CUDA check on an idle context3 GPU (with approval); push `qlora-4bit` and point join.sh at it (with approval).
+- [ ] macOS leaked semaphores (found 2026-11-14): with the spawn start method every multiprocessing lock is a NAMED POSIX semaphore
+      until Python's resource_tracker unlinks it. SIGKILLing a worker's whole process group killed the tracker too, so each
+      killed BloomBee worker leaked names until reboot; after ~10,000 (kern.posix.sem.max) no Python program on the Mac can
+      create a lock ("OSError: [Errno 28] No space left on device"). Fixed in the agent, swarm runner and e2e_real
+      (kill the group but spare `multiprocessing.resource_tracker`); this Mac still needs one reboot to clear the old leaks.
+- [x] A worker that crashed while starting could hang forever (the platform waited for it): the agent now kills a worker that
+      printed a traceback and is not online 15 s later, or is not online after 20 minutes, and reports why (`failed_to_start`).
+- [ ] Pre-existing flaky test: tests/test_deployments_e2e.py::test_train_then_come_back_later_deploy_compare_and_evaluate
+      (2/8 failures on main: the 1-GPU base deployment sometimes reports 2 GPUs).
 - [ ] Bigger models (7B+): split-across-GPUs proof run (not done; needs more memory than this Mac comfortably has).
 - [~] Memory and step time on the Mac (TinyLlama-1.1B, batch 2, seq 128): worker process RSS about 0.6 GB (first
       stage), 1.0 GB (last stage) with 2-3 stages; step time about 1 s with 2 stages and 1-2.5 s with 3 stages.
@@ -169,6 +181,8 @@ Things we decided to do later, parked ideas, and known open issues. Newest chang
   cause not found; memory and step times recorded.
 - 2026-11-12: Pip's Run (mario/): own platformer + Qwen2.5-0.5B trained with PPO on context3 GPUs 2 and 3.
 - 2026-11-13: Pip's Run final model clears Level 1 on 97.5% of 400 unseen seeds; all runs stopped and cleaned up.
+- 2026-11-14: QLoRA (4-bit base) built and measured; provider desktop app (Stage 2 of ROADMAP.md); leaked-semaphore and
+  hung-worker fixes.
 
 ## Laptop lid
 - [x] Agent polls the lid (macOS `AppleClamshellState`, Linux ACPI); on close it reports its GPUs offline and SIGKILLs its workers at once, so the platform replaces them without waiting for a heartbeat timeout. Tested with a simulated lid (agent + real backend).

@@ -12,7 +12,7 @@ from sqlmodel import Session
 
 from app.agent_hub import AgentHub
 from app.relay_hub import RelayHub
-from app.api import agent, agent_ws, auth, deployments, events, files, install, jobs, ledger, pool, providers
+from app.api import agent, agent_ws, auth, deployments, events, files, install, jobs, ledger, pool, provider_app, providers
 from app.config import Settings
 from app.db import init_db, make_engine, utcnow
 from app.deps import LoginLimiter
@@ -68,7 +68,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CORSMiddleware, allow_origins=list(settings.cors_origins), allow_credentials=True,
         allow_methods=["*"], allow_headers=["*"],
     )
-    for module in (auth, providers, agent, agent_ws, install, pool, ledger, jobs, deployments, files, events):
+    for module in (auth, providers, agent, agent_ws, install, pool, ledger, jobs, deployments, files, events, provider_app):
         app.include_router(module.router)
 
     @app.get("/health", tags=["meta"])

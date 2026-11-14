@@ -1,6 +1,7 @@
 """Deploy stage of scripts/e2e_real.py: runs against the live backend with real BloomBee workers and TinyLlama."""
 from __future__ import annotations
 
+import os
 import time
 
 PROMPT = "Ticket: my package has not arrived yet. Please fix this asap.\nAnswer:"
@@ -9,7 +10,10 @@ PROMPT = "Ticket: my package has not arrived yet. Please fix this asap.\nAnswer:
 def run_deploy_stage(url, alice, provider, model, log, results, wait):
     """alice trained `model` earlier; she comes back, deploys it (2 GPUs) next to the base model (1 GPU) and compares."""
     t = time.monotonic()
-    tuned = alice.post("/deployments", json={"model_kind": "finetuned", "finetuned_model_id": model["id"], "requested_gpus": 2}).json()
+    deploy_bits = int(os.environ.get("DEPLOY_BITS", 16))
+    tuned = alice.post("/deployments", json={"model_kind": "finetuned", "finetuned_model_id": model["id"], "requested_gpus": 2,
+                                             "weight_bits": deploy_bits}).json()
+    results["deploy_bits"] = deploy_bits
     base = alice.post("/deployments", json={"model_kind": "base", "base_model_id": 1, "requested_gpus": 1}).json()
     log("deployments requested", tuned=tuned["id"], base=base["id"], tuned_status=tuned["status"], base_status=base["status"])
 

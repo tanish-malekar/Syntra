@@ -64,6 +64,7 @@ class Platform:
         self.users: dict[str, httpx.AsyncClient] = {}
         self.agents: list[Agent] = []
         self.agent_tasks: list[asyncio.Task] = []
+        self.worker_specs: list = []  # every WorkerSpec an agent was asked to start
 
     async def __aenter__(self):
         self.task = asyncio.create_task(self.server.serve())
@@ -88,15 +89,19 @@ class Platform:
         return c
 
     async def provider(self, user: httpx.AsyncClient, name: str, gpus=3, memory_mb=6000, chip="Apple M4 Pro",
-                       device="mps", simulated=True, type="individual") -> Agent:
+                       device="mps", simulated=True, type="individual", supports_4bit=False) -> Agent:
         pid = (await user.post("/providers", json={"name": name, "type": type})).json()["id"]
         token = (await user.post(f"/providers/{pid}/agent-tokens", json={"label": name})).json()["token"]
         cfg = AgentConfig(work_dir=self.tmp / f"agent-{name}")
-        manager = WorkerManager(cfg, None, lambda s, c: ([sys.executable, str(FAKE_WORKER), "--peer", f"Peer{s.worker_id}"], {}))
+        def command(s, c):
+            self.worker_specs.append(s)
+            return [sys.executable, str(FAKE_WORKER), "--peer", f"Peer{s.worker_id}"], {}
+        manager = WorkerManager(cfg, None, command)
         hardware = lambda: [GpuInfo(0, chip, device, memory_mb * gpus, memory_mb * gpus)]
         agent = Agent(AgentSettings(server=self.url, token=token, region=name, heartbeat_interval=0.3, simulated=simulated,
                                     sim_count=gpus, sim_memory_gb=memory_mb / 1024), cfg, detector=hardware, manager=manager)
         manager.on_event = agent._on_worker_event
+        agent.supports_4bit = supports_4bit
         self.agents.append(agent)
         self.agent_tasks.append(asyncio.create_task(agent.run()))
         await asyncio.wait_for(agent.connected.wait(), 10)

@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
@@ -14,10 +15,15 @@ from websockets.asyncio.client import connect as ws_connect
 from syntra_agent import hardware
 from syntra_agent.files import ensure_model_files
 from syntra_agent.hardware import GpuInfo
+from syntra_agent.control import ControlServer
 from syntra_agent.relay import Relay
-from syntra_agent.workers import AgentConfig, WorkerManager, WorkerSpec
+from syntra_agent.workers import AgentConfig, WorkerManager, WorkerSpec, supports_4bit
 
 log = logging.getLogger("syntra_agent")
+
+
+class AgentRevoked(RuntimeError):
+    """The platform rejected this machine's token (revoked on the website, or the app signed out)."""
 
 
 @dataclass
@@ -33,6 +39,8 @@ class AgentSettings:
     sim_memory_gb: float = 6.0
     relay: bool = False  # no inbound connections needed: GPU worker traffic is carried over the platform connection
     relay_dial: Optional[Callable[[int], tuple[str, int]]] = None  # tests only: where an incoming relayed port is dialled
+    control: bool = False  # serve the local control API for the desktop app (127.0.0.1, secret in <state_dir>/agent.json)
+    state_dir: Path = field(default_factory=lambda: Path("~/.syntra").expanduser())
 
     @property
     def ws_url(self) -> str:
@@ -57,6 +65,14 @@ class Agent:
         self._lid_detector = lid_detector or hardware.lid_closed
         self.lid_closed = False
         self.relay: Optional[Relay] = None  # set while connected in relay mode
+        self.supports_4bit = supports_4bit(cfg)  # 4-bit base weights (QLoRA); needs a BloomBee with --compress_weight
+        # what the desktop app shows
+        self.paused = False  # the owner stopped sharing; running work may still be draining
+        self.state = "starting"  # starting | connected | reconnecting | paused | revoked | stopped
+        self.last_error = ""
+        self.last_heartbeat_ok: Optional[float] = None  # wall-clock seconds
+        self.provider_name = ""
+        self.control: Optional[ControlServer] = None
 
     # ---- hardware ---------------------------------------------------------------------------------
     def detect(self) -> list[GpuInfo]:
@@ -91,7 +107,7 @@ class Agent:
             r = await self._http.post("/agent/gpus", json={
                 "name": gpu.name, "device": gpu.device, "device_index": gpu.index,
                 "total_memory_mb": gpu.total_memory_mb, "free_memory_mb": gpu.free_memory_mb,
-                "region": self.s.region, "simulated": gpu.simulated,
+                "region": self.s.region, "simulated": gpu.simulated, "supports_4bit": self.supports_4bit,
             })
             r.raise_for_status()
             self.gpu_ids[gpu.index] = r.json()["id"]
@@ -101,9 +117,12 @@ class Agent:
     def _reported_status(self, gpu: GpuInfo) -> str:
         if self.lid_closed:
             return "offline"
+        working = bool(self.manager.on_gpu(gpu.index))
+        if self.paused:  # draining: a GPU still running a job stays leased until that job ends, then it goes offline
+            return "leased" if working else "offline"
         if gpu.busy_external:
             return "busy_external"
-        return "leased" if self.manager.on_gpu(gpu.index) else "idle"
+        return "leased" if working else "idle"
 
     def _free_memory(self, gpu: GpuInfo) -> int:
         if gpu.simulated:  # a simulated GPU is "full" by whatever its workers hold
@@ -123,12 +142,20 @@ class Agent:
                 continue
             r = await self._http.post(f"/agent/gpus/{gid}/heartbeat", json={
                 "free_memory_mb": self._free_memory(gpu), "status": self._reported_status(gpu),
-                "detail": gpu.busy_detail,
+                "detail": "paused by the owner" if self.paused else gpu.busy_detail,
             })
+            if r.status_code == 401:
+                self._revoked()
+                return
             if r.status_code == 404:  # the platform lost this GPU (e.g. database reset): register again
                 await self.register()
             elif r.status_code >= 400:
                 log.warning("heartbeat for gpu %s failed: %s %s", gid, r.status_code, r.text[:120])
+                self.last_error = f"heartbeat: HTTP {r.status_code}"
+            else:
+                self.last_heartbeat_ok = time.time()
+                if self.state in ("starting", "reconnecting"):
+                    self.state = "paused" if self.paused else "connected"
 
     async def _heartbeat_loop(self) -> None:
         while not self._stop.is_set():
@@ -136,6 +163,9 @@ class Agent:
                 await self.heartbeat_once()
             except (httpx.HTTPError, OSError) as exc:
                 log.warning("heartbeat failed: %s", exc)
+                self.last_error = f"cannot reach the platform: {exc}"
+                if self.state in ("connected", "paused", "starting"):
+                    self.state = "reconnecting"
             try:
                 await asyncio.wait_for(self._stop.wait(), self.s.heartbeat_interval)
             except asyncio.TimeoutError:
@@ -181,6 +211,8 @@ class Agent:
             if name == "start_worker":
                 if self.lid_closed:
                     return {"ok": False, "error": "the lid of this machine is closed"}
+                if self.paused:
+                    return {"ok": False, "error": "the owner paused sharing on this machine"}
                 spec = WorkerSpec.from_command(cmd)
                 gpu = self.last.get(spec.device_index)
                 if gpu is None:
@@ -288,14 +320,82 @@ class Agent:
                 pass
             delay = min(delay * 2, 10.0)
 
+    # ---- desktop app controls ---------------------------------------------------------------------
+    def _revoked(self) -> None:
+        log.error("the platform rejected this machine's token (revoked or signed out); stopping")
+        self.state, self.last_error = "revoked", "This machine was signed out or its token was revoked."
+        self.stop()
+
+    async def pause(self, mode: str = "drain") -> dict:
+        """Stop sharing. drain: running jobs keep this GPU until they end; now: stop them (the platform moves them elsewhere)."""
+        if mode not in ("drain", "now"):
+            raise ValueError("mode must be drain or now")
+        self.paused, self.state = True, "paused"
+        if mode == "now":
+            await asyncio.gather(*(self.manager.kill(w["worker_id"]) for w in self.manager.describe()))
+        await self._heartbeat_quietly()
+        return self.status()
+
+    async def resume(self) -> dict:
+        self.paused = False
+        self.state = "connected" if self.connected.is_set() else "reconnecting"
+        await self._heartbeat_quietly()
+        return self.status()
+
+    async def quit(self) -> dict:
+        """Go offline at once (no waiting for a heartbeat timeout), stop the workers, then exit."""
+        self.paused = True
+        await asyncio.gather(*(self.manager.kill(w["worker_id"]) for w in self.manager.describe()))
+        await self._heartbeat_quietly()
+        self.state = "stopped"
+        asyncio.get_running_loop().call_later(0.2, self.stop)  # let the reply go out first
+        return self.status()
+
+    async def _heartbeat_quietly(self) -> None:
+        try:
+            await self.heartbeat_once()
+        except (httpx.HTTPError, OSError) as exc:
+            log.warning("heartbeat failed: %s", exc)
+
+    def status(self) -> dict:
+        workers = self.manager.describe()
+        gpus = []
+        for index, gpu in sorted(self.last.items()):
+            gpus.append({"index": index, "name": gpu.name, "device": gpu.device, "platform_id": self.gpu_ids.get(index),
+                         "total_memory_mb": gpu.total_memory_mb, "status": self._reported_status(gpu),
+                         "busy_detail": gpu.busy_detail, "workers": len(self.manager.on_gpu(index))})
+        return {"state": self.state, "paused": self.paused, "connected": self.connected.is_set(), "lid_closed": self.lid_closed,
+                "server": self.s.server, "provider_name": self.provider_name, "supports_4bit": self.supports_4bit,
+                "last_heartbeat_ok": self.last_heartbeat_ok, "last_error": self.last_error,
+                "draining": self.paused and bool(workers), "gpus": gpus, "workers": workers}
+
+    async def _start_control(self) -> None:
+        async def get_status(_):
+            return self.status()
+
+        async def post_pause(body):
+            return await self.pause(body.get("mode", "drain"))
+
+        async def post_resume(_):
+            return await self.resume()
+
+        async def post_quit(_):
+            return await self.quit()
+
+        self.control = ControlServer({("GET", "/status"): get_status, ("POST", "/pause"): post_pause,
+                                      ("POST", "/resume"): post_resume, ("POST", "/quit"): post_quit}, self.s.state_dir)
+        await self.control.start()
+
     # ---- run --------------------------------------------------------------------------------------
     async def run(self) -> None:
         self._http = httpx.AsyncClient(base_url=self.s.server, headers={"Authorization": f"Bearer {self.s.token}"},
                                        timeout=10.0)
         try:
-            me = await self._http.get("/agent/me")
-            me.raise_for_status()
-            log.info("authenticated as provider %r (%s)", me.json()["provider_name"], me.json()["provider_type"])
+            if self.s.control:
+                await self._start_control()
+            me = await self._authenticate()
+            self.provider_name = me["provider_name"]
+            log.info("authenticated as provider %r (%s)", me["provider_name"], me["provider_type"])
             await self.register()
             tasks = [asyncio.create_task(self._heartbeat_loop()), asyncio.create_task(self._channel_loop()),
                      asyncio.create_task(self._lid_loop())]
@@ -310,6 +410,29 @@ class Agent:
         finally:
             await self.manager.stop_all()
             await self._http.aclose()
+            if self.control is not None:
+                await self.control.close()
+
+    async def _authenticate(self) -> dict:
+        """Wait for the platform (the app may start before the network is up); give up only on a rejected token."""
+        delay = 1.0
+        while True:
+            try:
+                me = await self._http.get("/agent/me")
+                if me.status_code == 401:
+                    self._revoked()
+                    raise AgentRevoked(self.last_error)
+                me.raise_for_status()
+                return me.json()
+            except (httpx.HTTPError, OSError) as exc:
+                self.state, self.last_error = "reconnecting", f"cannot reach the platform: {exc}"
+                log.warning("platform not reachable (%s); retrying in %.0fs", exc, delay)
+                try:
+                    await asyncio.wait_for(self._stop.wait(), delay)
+                    raise asyncio.CancelledError  # stopped while waiting
+                except asyncio.TimeoutError:
+                    pass
+                delay = min(delay * 2, 30.0)
 
     def stop(self) -> None:
         self._stop.set()

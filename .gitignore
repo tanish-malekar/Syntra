@@ -19,3 +19,7 @@ frontend/dist/
 mario/.venv/
 mario/runs/*/ckpt/
 mario/runs/*/dagger_data.jsonl
+
+# provider desktop app build output
+provider-app/.build/
+provider-app/dist/

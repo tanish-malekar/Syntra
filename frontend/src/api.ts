@@ -71,11 +71,12 @@ export interface EvalScores {
 }
 export interface Model {
   id: number; name: string; base_model: string; base_model_id: number; job_id: number | null; created_at: string;
-  scores: EvalScores; deployed: boolean;
+  scores: EvalScores; deployed: boolean; weight_bits: WeightBits;
 }
 export interface Deployment {
   id: number; model_kind: "base" | "finetuned"; model_name: string; base_model: string; finetuned_model_id: number | null;
-  status: "queued" | "starting" | "running" | "stopped" | "failed"; num_gpus: number; endpoint: string; created_at: string; job: Job;
+  status: "queued" | "starting" | "running" | "stopped" | "failed"; num_gpus: number; endpoint: string; created_at: string;
+  weight_bits: WeightBits; job: Job;
 }
 export interface GenerateParams {
   prompt: string; max_new_tokens?: number; do_sample?: boolean; temperature?: number; top_p?: number; top_k?: number; seed?: number;
@@ -85,9 +86,12 @@ export interface LedgerLine { id: number; created_at: string; gpu_class: string;
 export interface Ledger { total: number; gpu_seconds: number; entries: LedgerLine[] }
 export interface StoredEvent { id: number | null; type: string; ts: string; job_id: number | null; gpu_id: number | null; payload: Record<string, any> }
 
+/** Precision of the frozen base weights on the workers: 16 = float16, 4 = 4-bit (QLoRA training / light serving). */
+export type WeightBits = 16 | 4;
+
 export interface JobInput {
   base_model_id: number; dataset_id: number; requested_gpus: number | null; trusted_only: boolean; steps: number;
-  batch_size?: number; seq_len?: number; lr?: number; rank?: number; name?: string;
+  batch_size?: number; seq_len?: number; lr?: number; rank?: number; weight_bits?: WeightBits; name?: string;
 }
 
 // ---------------------------------------------------------------------------------------------- calls
@@ -117,8 +121,8 @@ export const api = {
     form.append("file", file);
     return request<Dataset>("/datasets", { method: "POST", body: form });
   },
-  plan: (baseModelId: number, requestedGpus: number | null, trustedOnly: boolean) => {
-    const q = new URLSearchParams({ base_model_id: String(baseModelId), trusted_only: String(trustedOnly) });
+  plan: (baseModelId: number, requestedGpus: number | null, trustedOnly: boolean, weightBits: WeightBits = 16) => {
+    const q = new URLSearchParams({ base_model_id: String(baseModelId), trusted_only: String(trustedOnly), weight_bits: String(weightBits) });
     if (requestedGpus) q.set("requested_gpus", String(requestedGpus));
     return get<Plan>(`/plans?${q}`);
   },
@@ -138,7 +142,8 @@ export const api = {
 
   deployments: () => get<Deployment[]>("/deployments"),
   deployment: (id: number) => get<Deployment>(`/deployments/${id}`),
-  deploy: (body: { model_kind: "base" | "finetuned"; base_model_id?: number; finetuned_model_id?: number; requested_gpus: number | null; trusted_only?: boolean }) =>
+  deploy: (body: { model_kind: "base" | "finetuned"; base_model_id?: number; finetuned_model_id?: number; requested_gpus: number | null;
+                   trusted_only?: boolean; weight_bits?: WeightBits }) =>
     post<Deployment>("/deployments", body),
   stopDeployment: (id: number) => post<{ ok: boolean }>(`/deployments/${id}/stop`),
   generate: (id: number, params: GenerateParams) => post<Generation>(`/deployments/${id}/generate`, params),

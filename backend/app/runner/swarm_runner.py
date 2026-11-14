@@ -37,10 +37,33 @@ def emit(obj: dict) -> None:
 children: list[subprocess.Popen] = []
 
 
+def kill_group(pgid: int, sig: int = signal.SIGKILL) -> None:
+    """Kill a process group but spare Python's multiprocessing resource_tracker: on macOS it must outlive its parent to
+    unlink the named semaphores, or they leak until reboot (see agent/syntra_agent/workers.py kill_process_group)."""
+    try:
+        out = subprocess.run(["ps", "-A", "-o", "pid=,pgid=,command="], capture_output=True, text=True, timeout=5).stdout
+        members = [l.split(None, 2) for l in out.splitlines()]
+        members = [(int(m[0]), m[2] if len(m) > 2 else "") for m in members if len(m) >= 2 and m[1] == str(pgid)]
+    except Exception:
+        members = []
+    if not members:
+        try:
+            os.killpg(pgid, sig)
+        except Exception:
+            pass
+        return
+    for pid, command in members:
+        if "multiprocessing.resource_tracker" not in command:
+            try:
+                os.kill(pid, sig)
+            except Exception:
+                pass
+
+
 def _shutdown(*_):
     for c in children:
         try:
-            os.killpg(c.pid, signal.SIGKILL)
+            kill_group(c.pid)
         except Exception:
             pass
     sys.stdout.flush()
@@ -135,7 +158,7 @@ def run_train() -> int:
         time.sleep(0.2)
     drain()
     try:  # the trainer's own helper processes (DHT, p2pd) must not outlive it
-        os.killpg(proc.pid, signal.SIGKILL)
+        kill_group(proc.pid)
     except Exception:
         pass
     rc = proc.returncode
@@ -190,7 +213,7 @@ except Exception as exc:
 sys.stdout.flush()
 for c in children:
     try:
-        os.killpg(c.pid, signal.SIGKILL)
+        kill_group(c.pid)
     except Exception:
         pass
 try:

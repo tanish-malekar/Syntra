@@ -6,6 +6,8 @@ Fine-tune models on GPUs that people and data centers share, and earn from the G
 - **Consumers** start a training run. The scheduler picks idle GPUs from the pool, splits the model across them
   (LoRA via BloomBee), and keeps training if a GPU dies: it finds another idle GPU, loads that slice there, and continues.
   Closing a laptop lid takes that GPU out at once and triggers the same replacement.
+- **QLoRA**: choose "4-bit" base weights on the Train page and the frozen model takes about a third of the GPU memory, so it
+  fits on fewer or smaller GPUs (slower steps). Deployments can also be served in 4-bit.
 - Every fine-tuned model is **stored per user**. Come back later, deploy it on N GPUs, try it (greedy or sampling),
   compare it with the base model, and score it on held-out examples.
 - Several users work at once on different GPUs; extra jobs wait in a FIFO queue. Payments are simulated (priced per GPU class).
@@ -17,6 +19,7 @@ Fine-tune models on GPUs that people and data centers share, and earn from the G
 | `backend/` | FastAPI + SQLite: accounts, pool, scheduler, orchestrator, model registry, deployments, events, ledger |
 | `agent/` | Provider agent (`python -m syntra_agent`): Mac and NVIDIA discovery, worker processes, command channel, model downloads, lid watcher |
 | `frontend/` | React + Vite + TypeScript UI (light theme; Train is the landing page) |
+| `provider-app/` | macOS menu bar app for providers: sign in once, click **Share my GPU**; shows status, GPU time used and earnings |
 | `bridge/` | SSH tunnels to a machine that cannot reach the platform directly (context3) |
 | `scripts/` | `dev.sh`, `demo_stack.py` (fake swarm for the UI), `e2e_real.py`, `e2e_context3.py` |
 | `experiments/` | The early BloomBee-on-Apple-GPU experiments the platform is built on |
@@ -111,12 +114,27 @@ tunnel to port 8000) and `SYNTRA_DHT_PORT=31001`. Status: built and unit-tested,
 Live demo (this Mac + a second MacBook that runs the command above + one idle context3 GPU that takes over when the second
 MacBook's lid is closed): `scripts/e2e_live.py` (usage in its docstring).
 
+## 5. Share a Mac with one click (provider app)
+
+```bash
+provider-app/build.sh --open      # builds provider-app/dist/SyntraProvider.app and starts it (menu bar icon)
+```
+
+Sign in with the server address and your Syntra account, then click **Share my GPU**. The first time, the app installs the
+agent under `~/.syntra` (the same steps as `join.sh --install-only`). It keeps the agent running in the background and shows:
+- shared / in use / paused / disconnected;
+- GPU time used and earnings, today and in total, including an estimate for the job running now.
+
+Pause offers "finish the current job first" or "stop now". Quitting takes the GPUs out of the pool at once. Optional settings:
+pause on battery, start at login. Details and edge cases are in `provider-app/README.md` and `ROADMAP.md`.
+
 ## Tests
 
 ```bash
 cd backend && .venv/bin/python -m pytest                      # 92: auth, pool, scheduler, orchestrator, deployments, files (fake swarm, real agents)
 cd agent && PYTHONPATH=. ../backend/.venv/bin/python -m pytest tests   # 20: hardware parsing, workers, hanging driver, lid close, agent <-> real backend
 cd frontend && npx tsc -b && npx vitest run                    # type check + 6 unit tests
+cd provider-app && swift test                                  # provider app: state and usage parsing
 ```
 
 End-to-end with real models (slow; set `SCRATCH` to a folder containing `models/tinyllama`, `BB_PYTHON` to the BloomBee venv's python):

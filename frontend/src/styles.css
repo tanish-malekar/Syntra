@@ -80,7 +80,7 @@ h1 + p.muted { font-size: 15.5px; max-width: 70ch; }
 .empty { text-align: center; padding: 44px 16px; color: var(--muted); }
 
 /* controls */
-label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #2b3354; }
+label, .label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #2b3354; }
 input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: 10px; background: #fff; color: var(--text); font: inherit; transition: border-color 0.15s, box-shadow 0.15s; }
 input:hover, select:hover, textarea:hover { border-color: #b9c0d8; }
 textarea { min-height: 96px; resize: vertical; }

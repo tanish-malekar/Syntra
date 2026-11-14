@@ -1,9 +1,10 @@
 import { useCallback, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api, type BaseModel, type Model } from "../api";
+import { api, type BaseModel, type Model, type WeightBits } from "../api";
 import { Chip, ErrorBox, useToast } from "../components/ui";
 import { pct } from "../format";
 import { useLive } from "../state";
+import { WeightBitsField } from "./Train";
 
 export function ScoreBars({ scores }: { scores: Model["scores"] }) {
   if (scores.status === "running") return <div className="alert info">Evaluating on the held-out examples…</div>;
@@ -33,12 +34,13 @@ function DeployForm({ model, onDone }: { model: Model; onDone: () => void }) {
   const nav = useNavigate();
   const [auto, setAuto] = useState(true);
   const [count, setCount] = useState(2);
+  const [weightBits, setWeightBits] = useState<WeightBits>(model.weight_bits);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const go = async () => {
     setBusy(true); setError(null);
     try {
-      await api.deploy({ model_kind: "finetuned", finetuned_model_id: model.id, requested_gpus: auto ? null : count });
+      await api.deploy({ model_kind: "finetuned", finetuned_model_id: model.id, requested_gpus: auto ? null : count, weight_bits: weightBits });
       onDone();
       nav("/deployments");
     } catch (e) { setError((e as Error).message); setBusy(false); }
@@ -51,6 +53,7 @@ function DeployForm({ model, onDone }: { model: Model; onDone: () => void }) {
         <label style={{ margin: 0 }}><input type="radio" checked={!auto} onChange={() => setAuto(false)} /> Exactly <input type="number" min={1} max={22} value={count} disabled={auto} onChange={(e) => setCount(Math.max(1, Number(e.target.value)))} style={{ width: 64, display: "inline-block" }} aria-label="Number of GPUs" /> GPUs</label>
         <button className="primary" disabled={busy} onClick={go}>Deploy</button>
       </div>
+      <WeightBitsField value={weightBits} onChange={setWeightBits} name={`deploy-bits-${model.id}`} purpose="deploy" />
     </div>
   );
 }
@@ -78,7 +81,10 @@ export default function ModelsPage() {
             <div className="card stack" key={m.id}>
               <header>
                 <div><h2 style={{ margin: 0 }}>{m.name}</h2><span className="small muted">{m.base_model} · {new Date(m.created_at).toLocaleString()}</span></div>
-                {m.deployed ? <Chip tone="good" pulse>Deployed</Chip> : <Chip tone="plain">Not deployed</Chip>}
+                <div className="row">
+                  {m.weight_bits === 4 && <Chip tone="info">QLoRA 4-bit</Chip>}
+                  {m.deployed ? <Chip tone="good" pulse>Deployed</Chip> : <Chip tone="plain">Not deployed</Chip>}
+                </div>
               </header>
               <ScoreBars scores={m.scores} />
               <div className="row">

@@ -86,7 +86,7 @@ export default function DeploymentsPage() {
               <header>
                 <div>
                   <h2 style={{ margin: 0 }}>{d.model_name} <span className="small muted">#{d.id}</span></h2>
-                  <span className="small muted">{d.model_kind === "base" ? "Base model" : "Fine-tuned"} · {d.num_gpus || d.job.requested_gpus || "auto"} GPU{(d.num_gpus || d.job.requested_gpus) === 1 ? "" : "s"}</span>
+                  <span className="small muted">{d.model_kind === "base" ? "Base model" : "Fine-tuned"} · {d.num_gpus || d.job.requested_gpus || "auto"} GPU{(d.num_gpus || d.job.requested_gpus) === 1 ? "" : "s"}{d.weight_bits === 4 ? " · 4-bit weights" : ""}</span>
                 </div>
                 <div className="row"><StatusChip status={d.status} />{d.status === "running" && <button className="small" onClick={() => setOpen(open === d.id ? null : d.id)}>{open === d.id ? "Hide" : "Try it"}</button>}<button className="small danger" onClick={() => stop(d)}>Stop</button></div>
               </header>

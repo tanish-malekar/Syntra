@@ -91,7 +91,7 @@ export default function RunPage() {
     <div className="stack">
       <div className="row spread">
         <div>
-          <div className="row"><h1 style={{ margin: 0 }}>Run #{job.id} · {String(job.config.model_name ?? job.base_model)}</h1><StatusChip status={job.status} /></div>
+          <div className="row"><h1 style={{ margin: 0 }}>Run #{job.id} · {String(job.config.model_name ?? job.base_model)}</h1><StatusChip status={job.status} />{Number(job.config.weight_bits) === 4 && <Chip tone="info">QLoRA 4-bit</Chip>}</div>
           <p className="muted">{job.base_model} · {job.requested_gpus ? `${job.requested_gpus} GPUs requested` : "GPUs chosen automatically"}{job.trusted_only ? " · trusted GPUs only" : ""}</p>
         </div>
         <div className="row">

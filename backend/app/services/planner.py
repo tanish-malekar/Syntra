@@ -4,15 +4,20 @@ No database access here (the scheduler builds `Candidate`s from the pool), so ev
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 RUNTIME_OVERHEAD_MB = 500  # per worker: runtime, KV cache and activation buffers (measured ~0.6-1.0 GB per TinyLlama half)
+# Memory per layer relative to float16 when the frozen base weights are stored in 4-bit (FlexGen group quantization:
+# 4 bits + an fp16 scale/min pair per 64 values = 4.5 of 16 bits, rounded up for the working buffers).
+WEIGHT_BITS_FRACTION = {16: 1.0, 4: 0.3}
 
 
 @dataclass(frozen=True)
 class ModelSpec:
     num_layers: int
     per_layer_memory_mb: int
+    weight_bits: int = 16  # 16 = float16 base weights, 4 = 4-bit base (QLoRA training / light serving)
 
 
 @dataclass(frozen=True)
@@ -43,13 +48,22 @@ class Plan:
     notes: list[str] = field(default_factory=list)
 
 
+def layer_memory_mb(model: ModelSpec) -> int:
+    return max(1, math.ceil(model.per_layer_memory_mb * WEIGHT_BITS_FRACTION[model.weight_bits]))
+
+
+def overhead_mb(model: ModelSpec) -> int:
+    """Per-worker fixed memory. A 4-bit worker also holds one layer decompressed to float16 while computing it."""
+    return RUNTIME_OVERHEAD_MB + (model.per_layer_memory_mb if model.weight_bits != 16 else 0)
+
+
 def stage_memory_mb(model: ModelSpec, layers: int) -> int:
-    return layers * model.per_layer_memory_mb + RUNTIME_OVERHEAD_MB
+    return layers * layer_memory_mb(model) + overhead_mb(model)
 
 
 def capacity_layers(model: ModelSpec, free_memory_mb: int) -> int:
     """How many layers fit on a GPU with this much free memory (0 if not even one)."""
-    return max(0, (free_memory_mb - RUNTIME_OVERHEAD_MB) // model.per_layer_memory_mb)
+    return max(0, (free_memory_mb - overhead_mb(model)) // layer_memory_mb(model))
 
 
 def split_layers(total: int, capacities: list[int]) -> list[int] | None:

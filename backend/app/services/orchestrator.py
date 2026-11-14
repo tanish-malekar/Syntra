@@ -332,7 +332,8 @@ class Orchestrator:
                 "hf_id": base.hf_id, "path": run.spec.get("worker_model_path", "")},
                 "fetch": ({"model_id": run.spec["finetuned_model_id"]} if run.spec.get("finetuned_model_id") else None),
                 "layer_start": lease.layer_start, "layer_end": lease.layer_end, "dht_prefix": run.prefix,
-                "initial_peers": run.initial_peers, "mode": "train" if run.kind == "train" else "serve", "batch_size": 2}
+                "initial_peers": run.initial_peers, "mode": "train" if run.kind == "train" else "serve", "batch_size": 2,
+                "weight_bits": int(run.spec.get("weight_bits", 16))}
 
     async def _start_worker(self, run: JobRun, lease: Lease, replacement: bool = False) -> None:
         gpu, base = await self._db(lambda s: (s.get(Gpu, lease.gpu_id), s.get(BaseModel, s.get(Job, run.job_id).base_model_id)))
@@ -370,9 +371,10 @@ class Orchestrator:
         elif kind == "worker.online":
             await self._on_worker_online(run, lease_id, msg)
         elif kind == "worker.exited":
-            reason = run.killed.pop(worker_id, None) or ("stopped" if msg.get("reason") == "stopped" else "exited")
+            reason = run.killed.pop(worker_id, None) or {"stopped": "stopped", "failed_to_start": "failed_to_start"}.get(
+                msg.get("reason"), "exited")
             if reason != "stopped":
-                await self._handle_down(run, lease_id, reason)
+                await self._handle_down(run, lease_id, reason, detail=str(msg.get("error", ""))[:300])
 
     async def _on_worker_online(self, run: JobRun, lease_id: int, msg: dict) -> None:
         if lease_id in run.online_leases:
