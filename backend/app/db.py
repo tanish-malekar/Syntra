@@ -43,7 +43,8 @@ def make_engine(url: str):
 
 # Columns added after a release: (table, column, SQL type and default). create_all() never alters an existing table.
 _ADDED_COLUMNS = [("gpu", "supports_4bit", "BOOLEAN NOT NULL DEFAULT 0"),
-                  ("agenttoken", "machine_id", "VARCHAR NOT NULL DEFAULT ''")]
+                  ("agenttoken", "machine_id", "VARCHAR NOT NULL DEFAULT ''"),
+                  ("dataset", "format", "VARCHAR NOT NULL DEFAULT 'text'")]
 
 
 def init_db(engine) -> None:

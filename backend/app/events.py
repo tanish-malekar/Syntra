@@ -39,6 +39,9 @@ class EventType(str, Enum):
     DEPLOY_STOPPED = "deploy.stopped"
     EVAL_RESULT = "eval.result"
     LEDGER_CREDIT = "ledger.credit"
+    SESSION_READY = "session.ready"
+    SESSION_SAVED = "session.saved"
+    SESSION_CLOSED = "session.closed"
 
 
 # Required payload keys per event type (extra keys are allowed).
@@ -65,10 +68,13 @@ PAYLOAD_KEYS: dict[EventType, tuple[str, ...]] = {
     EventType.DEPLOY_STOPPED: ("reason",),
     EventType.EVAL_RESULT: ("model_label", "n", "valid_json", "dept_correct", "urgency_correct"),
     EventType.LEDGER_CREDIT: ("provider_id", "amount", "gpu_seconds"),
+    EventType.SESSION_READY: ("trainable_parameters",),
+    EventType.SESSION_SAVED: ("model_id", "name"),
+    EventType.SESSION_CLOSED: ("reason",),
 }
 assert set(PAYLOAD_KEYS) == set(EventType)
 
-WORKER_DOWN_REASONS = ("exited", "heartbeat_timeout", "killed_by_user")
+WORKER_DOWN_REASONS = ("exited", "heartbeat_timeout", "killed_by_user", "failed_to_start")
 
 
 def is_pool_level(event_type: str) -> bool:

@@ -83,6 +83,10 @@ class JobRun:
     error: str = ""
     task: Optional[asyncio.Task] = None
     last_step: dict = field(default_factory=dict)
+    last_call: float = field(default_factory=time.monotonic)  # sessions: closed after settings.session_idle_seconds
+    idem: dict = field(default_factory=dict)  # sessions: idempotency key -> future of the first call with that key
+    closing: bool = False
+    close_reason: str = "stopped"  # sessions: closed | idle | stopped
 
 
 class Orchestrator:
@@ -142,6 +146,7 @@ class Orchestrator:
                 continue
             await self._check_silent_gpus(run)
             await self._retry_pending(run)
+        await self._close_idle_sessions()
 
     async def submit(self, job_id: int) -> bool:
         """Called right after a job is created: lease immediately if the pool allows, otherwise it queues."""
@@ -254,15 +259,24 @@ class Orchestrator:
             run.swarm_ready = True
         elif kind == "train.step":
             run.last_step = msg
-            await self._db(lambda s: self.events.publish(
+            await self._db(lambda s: self.events.publish(  # DPO steps also carry reward_margin, reward_accuracy, ...
                 s, EventType.TRAIN_STEP, job_id=run.job_id, user_id=run.owner_id,
-                payload={k: msg[k] for k in ("step", "loss", "grad_norm", "step_seconds")}))
+                payload={k: v for k, v in msg.items() if k != "type"}))
         elif kind == "train.finished":
             run.result = msg
         elif kind in ("swarm_timeout", "runner_error"):
             run.error = msg.get("error") or f"swarm timeout: {msg.get('layers_online')}/{msg.get('layers_total')} layers online"
         elif kind in ("serve_ready", "result", "error") and run.kind == "deploy":
             await self._on_serve_message(run, msg)
+        elif kind in ("serve_ready", "result", "error") and run.kind == "session":
+            if kind == "serve_ready":
+                run.serving, run.last_call = True, time.monotonic()
+                await self._db(lambda s: self.events.publish(s, EventType.SESSION_READY, job_id=run.job_id, user_id=run.owner_id,
+                                                             payload={"trainable_parameters": msg.get("trainable_parameters", 0)}))
+            else:
+                future = run.waiters.pop(msg.get("id"), None)
+                if future is not None and not future.done():
+                    future.set_result(msg)
 
     async def _ensure_merged(self, run: JobRun, base: BaseModel) -> str:
         """Merge a fine-tuned model's LoRA adapter into FP16 base weights once; later deployments reuse the result."""
@@ -325,6 +339,92 @@ class Orchestrator:
             raise RuntimeError(msg.get("error", "generation failed"))
         return msg
 
+    # ---- RL sessions -------------------------------------------------------------------------------
+    async def call(self, job_id: int, op: str, args: dict, idempotency_key: str | None = None) -> dict:
+        """One training-session call (sample, forward_backward, optim_step, ...). Calls run one at a time in the runner.
+        A repeated idempotency key returns the first call's result instead of running it again (safe client retries)."""
+        run = self.runs.get(job_id)
+        if run is None or run.kind != "session" or not run.serving or run.runner is None or run.closing:
+            raise LookupError("the session is not running")
+        run.last_call = time.monotonic()
+        if idempotency_key:
+            known = run.idem.get(idempotency_key)
+            if known is not None:
+                return await asyncio.shield(known)
+            future = asyncio.get_running_loop().create_future()
+            run.idem[idempotency_key] = future
+            if len(run.idem) > 512:  # keep the most recent keys only
+                for k in list(run.idem)[: len(run.idem) - 512]:
+                    run.idem.pop(k, None)
+            try:
+                result = await self._call_runner(run, op, args)
+            except BaseException as exc:
+                run.idem.pop(idempotency_key, None)  # a failed call may be retried for real
+                if not future.done():
+                    future.set_exception(exc)
+                    future.exception()  # mark retrieved
+                raise
+            future.set_result(result)
+            return result
+        return await self._call_runner(run, op, args)
+
+    async def _call_runner(self, run: JobRun, op: str, args: dict) -> dict:
+        request_id = uuid.uuid4().hex
+        future: asyncio.Future = asyncio.get_running_loop().create_future()
+        run.waiters[request_id] = future
+        await run.runner.send({"op": op, "id": request_id, "args": args})
+        try:
+            msg = await asyncio.wait_for(future, self.settings.session_call_timeout)
+        except asyncio.TimeoutError:
+            run.waiters.pop(request_id, None)
+            raise TimeoutError(f"{op} timed out")
+        finally:
+            run.last_call = time.monotonic()
+        if msg.get("type") == "error":
+            if msg.get("bad_request"):
+                raise ValueError(msg.get("error", "bad request"))
+            raise RuntimeError(msg.get("error", f"{op} failed"))
+        return msg.get("data", {})
+
+    async def save_session(self, job_id: int, name: str) -> int:
+        """Save the session's adapter and store it as one of the owner's models (deployable like any other)."""
+        out = await self.call(job_id, "save", {"name": name})
+        run = self.runs[job_id]
+
+        def register(s):
+            mid = self._register_model(s, run, adapter_dir=out["adapter_dir"], name=name)
+            self.events.publish(s, EventType.SESSION_SAVED, job_id=job_id, user_id=run.owner_id,
+                                payload={"model_id": mid, "name": name, "step": out.get("step", 0)})
+            return mid
+        return await self._db(register)
+
+    async def close_session(self, job_id: int, save_as: str | None = None, reason: str = "closed") -> int | None:
+        run = self.runs.get(job_id)
+        if run is None or run.kind != "session":
+            raise LookupError("the session is not running")
+        model_id = None
+        if save_as and run.serving and not run.closing:
+            model_id = await self.save_session(job_id, save_as)
+        run.closing, run.close_reason = True, reason
+        await self.cancel(job_id)
+        return model_id
+
+    async def _close_idle_sessions(self) -> None:
+        now = time.monotonic()
+        for run in list(self.runs.values()):
+            if run.kind == "session" and run.serving and not run.closing and not run.waiters \
+                    and now - run.last_call > self.settings.session_idle_seconds:
+                async def idle_close(r=run):
+                    try:  # keep the work: an idle session is saved before its GPUs are released
+                        await self.close_session(r.job_id, save_as=f"{r.spec.get('model_name') or 'session'} (auto-saved)",
+                                                 reason="idle")
+                    except Exception:
+                        log.exception("closing idle session %s failed", r.job_id)
+                        await self.cancel(r.job_id)
+                task = asyncio.create_task(idle_close())
+                self.background.add(task)
+                task.add_done_callback(self.background.discard)
+
     # ---- workers -----------------------------------------------------------------------------------
     def _command(self, run: JobRun, lease: Lease, gpu: Gpu, base: BaseModel) -> dict:
         return {"cmd": "start_worker", "worker_id": f"j{run.job_id}-l{lease.id}", "device": gpu.device,
@@ -332,7 +432,7 @@ class Orchestrator:
                 "hf_id": base.hf_id, "path": run.spec.get("worker_model_path", "")},
                 "fetch": ({"model_id": run.spec["finetuned_model_id"]} if run.spec.get("finetuned_model_id") else None),
                 "layer_start": lease.layer_start, "layer_end": lease.layer_end, "dht_prefix": run.prefix,
-                "initial_peers": run.initial_peers, "mode": "train" if run.kind == "train" else "serve", "batch_size": 2,
+                "initial_peers": run.initial_peers, "mode": "train" if run.kind in ("train", "session") else "serve", "batch_size": 2,
                 "weight_bits": int(run.spec.get("weight_bits", 16))}
 
     async def _start_worker(self, run: JobRun, lease: Lease, replacement: bool = False) -> None:
@@ -484,8 +584,8 @@ class Orchestrator:
         if ok:
             model_id = await self._db(lambda s: self._register_model(s, run))
         status = "stopped" if run.cancelled else "completed" if ok else "failed"
-        if run.kind == "deploy":
-            status = "failed" if run.error else "stopped"  # a deployment only ends by being stopped, or by failing
+        if run.kind in ("deploy", "session"):
+            status = "failed" if run.error else "stopped"  # a deployment or session only ends by being stopped, or by failing
         reason = status
 
         def close(s):
@@ -504,21 +604,25 @@ class Orchestrator:
                     s.add(dep); s.commit()
                 self.events.publish(s, EventType.DEPLOY_STOPPED, job_id=job.id, user_id=job.owner_id,
                                     payload={"reason": (run.error or "failed")[:300] if status == "failed" else "stopped"})
+            elif run.kind == "session":
+                self.events.publish(s, EventType.SESSION_CLOSED, job_id=job.id, user_id=job.owner_id,
+                                    payload={"reason": (run.error or "failed")[:300] if status == "failed"
+                                             else run.close_reason})
             elif run.kind == "train" and status == "failed":
                 err = run.error or "; ".join((run.result.get("tail") or run.runner.tail if run.runner else [])[-3:]) or "training failed"
                 self.events.publish(s, EventType.TRAIN_FAILED, job_id=job.id, user_id=job.owner_id, payload={"error": err[:500]})
         await self._db(close)
         self.runs.pop(run.job_id, None)
 
-    def _register_model(self, s: Session, run: JobRun) -> int:
+    def _register_model(self, s: Session, run: JobRun, adapter_dir: str | None = None, name: str | None = None) -> int:
         job = s.get(Job, run.job_id)
         base = s.get(BaseModel, job.base_model_id)
         model = FineTunedModel(owner_id=job.owner_id, base_model_id=base.id, job_id=job.id,
-                               name=run.spec.get("model_name") or f"{base.name} fine-tuned (run #{job.id})")
+                               name=name or run.spec.get("model_name") or f"{base.name} fine-tuned (run #{job.id})")
         s.add(model); s.commit(); s.refresh(model)
         dest = Path(self.settings.registry_dir).expanduser() / str(model.id) / "adapter"
         dest.parent.mkdir(parents=True, exist_ok=True)
-        src = Path(run.result.get("adapter_dir", ""))
+        src = Path(adapter_dir or run.result.get("adapter_dir", ""))
         if src.exists():
             shutil.copytree(src, dest, dirs_exist_ok=True)
         model.adapter_path = str(dest)

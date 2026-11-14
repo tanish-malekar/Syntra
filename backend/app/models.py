@@ -67,6 +67,18 @@ class GpuClass(SQLModel, table=True):
     device_hint: str = ""  # mps | cuda
 
 
+class ApiKey(SQLModel, table=True):
+    """Personal API key for the SDK (`Authorization: Bearer syn_key_...`); plaintext shown once, only the hash is kept."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    key_hash: str = Field(index=True, unique=True)
+    label: str = ""
+    created_at: datetime = Field(default_factory=utcnow)
+    last_used_at: Optional[datetime] = None
+    revoked: bool = False
+
+
 class Gpu(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     provider_id: int = Field(foreign_key="provider.id", index=True)
@@ -108,6 +120,7 @@ class Dataset(SQLModel, table=True):
     heldout_path: str = ""
     num_rows: int = 0
     builtin: bool = False
+    format: str = "text"  # text: {"text"} per line (SFT) | preference: {"prompt", "chosen", "rejected"} per line (DPO)
     created_at: datetime = Field(default_factory=utcnow)
 
 

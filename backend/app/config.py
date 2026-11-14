@@ -42,6 +42,8 @@ class Settings:
     merge_argv: tuple = ()  # tests: replace examples/merge_lora.py
     runner_spec_extra: dict = field(default_factory=dict)  # tests: extra keys merged into the runner spec
     ready_timeout: float = 900.0
+    session_idle_seconds: float = 600.0  # an RL session with no call for this long is saved and closed (GPUs released)
+    session_call_timeout: float = 600.0  # one sampling / training call
     orchestrator_interval: float = 1.0
 
     @classmethod

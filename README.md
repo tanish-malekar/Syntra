@@ -8,6 +8,9 @@ Fine-tune models on GPUs that people and data centers share, and earn from the G
   Closing a laptop lid takes that GPU out at once and triggers the same replacement.
 - **QLoRA**: choose "4-bit" base weights on the Train page and the frozen model takes about a third of the GPU memory, so it
   fits on fewer or smaller GPUs (slower steps). Deployments can also be served in 4-bit.
+- **Preference tuning and RL**: DPO jobs from `{"prompt", "chosen", "rejected"}` data on the Train page (optionally on top
+  of an SFT model), and a Python SDK (`sdk/`, `pip install -e sdk`) with Tinker-style primitives and GRPO / PPO / DPO
+  loops where your own reward function runs locally. See `sdk/README.md`.
 - Every fine-tuned model is **stored per user**. Come back later, deploy it on N GPUs, try it (greedy or sampling),
   compare it with the base model, and score it on held-out examples.
 - Several users work at once on different GPUs; extra jobs wait in a FIFO queue. Payments are simulated (priced per GPU class).
@@ -19,6 +22,7 @@ Fine-tune models on GPUs that people and data centers share, and earn from the G
 | `backend/` | FastAPI + SQLite: accounts, pool, scheduler, orchestrator, model registry, deployments, events, ledger |
 | `agent/` | Provider agent (`python -m syntra_agent`): Mac and NVIDIA discovery, worker processes, command channel, model downloads, lid watcher |
 | `frontend/` | React + Vite + TypeScript UI (light theme; Train is the landing page) |
+| `sdk/` | `syntra` Python SDK: training sessions (sample, forward_backward, optim_step, logprobs) and RL loops |
 | `provider-app/` | macOS menu bar app for providers: sign in once, click **Share my GPU**; shows status, GPU time used and earnings |
 | `bridge/` | SSH tunnels to a machine that cannot reach the platform directly (context3) |
 | `scripts/` | `dev.sh`, `demo_stack.py` (fake swarm for the UI), `e2e_real.py`, `e2e_context3.py` |
@@ -135,6 +139,7 @@ cd backend && .venv/bin/python -m pytest                      # 92: auth, pool, 
 cd agent && PYTHONPATH=. ../backend/.venv/bin/python -m pytest tests   # 20: hardware parsing, workers, hanging driver, lid close, agent <-> real backend
 cd frontend && npx tsc -b && npx vitest run                    # type check + 6 unit tests
 cd provider-app && swift test                                  # provider app: state and usage parsing
+~/bb-venv/bin/python -m pytest backend/runner_tests            # RL losses + engine on a tiny model (needs torch)
 ```
 
 End-to-end with real models (slow; set `SCRATCH` to a folder containing `models/tinyllama`, `BB_PYTHON` to the BloomBee venv's python):

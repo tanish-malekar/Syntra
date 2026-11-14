@@ -84,7 +84,13 @@ Linux machines keep the one-line command, and their agent gets the same local st
 | Server URL wrong or unreachable | A test connection runs before pairing, with a clear error. |
 | Earnings while a job is running | Shown as "running: ≈ $x" until the lease ends and the ledger settles. |
 
-## Stage 3: RL service
+## Stage 3: RL service [x] built and tested with the fake swarm; real GPU run pending (reboot)
+
+Done: `backend/app/runner/rl_losses.py` + `rl_engine.py` (DPO, PPO-clip with k3 KL, importance sampling, cross-entropy,
+GRPO advantages, sampling with temperature/top-p/top-k/seed and behaviour log-probs), runner modes `session` and DPO jobs,
+`/sessions` API with idempotency keys and idle auto-save, API keys, preference datasets, `sdk/` (`syntra` package with
+`grpo`, `ppo`, `dpo` loops), Train page (method, beta, start from a model) and a Developers page.
+Still to do: a real GRPO and DPO run on TinyLlama on this Mac (after the reboot).
 
 Two layers, modelled on Together AI (managed DPO jobs) and Tinker / OpenPipe ART (an SDK with low-level primitives; the user's code computes rewards).
 

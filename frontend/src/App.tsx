@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, NavLink, Route, Routes } from "react-router-do
 import { Icon } from "./components/icons";
 import { Chip, ToastProvider } from "./components/ui";
 import AuthPage from "./pages/Auth";
+import DevelopersPage from "./pages/Developers";
 import ComparePage from "./pages/Compare";
 import DeploymentsPage from "./pages/Deployments";
 import LedgerPage from "./pages/Ledger";
@@ -27,6 +28,7 @@ function Shell() {
           <NavLink to="/models" className={link}>{Icon.models}My models</NavLink>
           <NavLink to="/deployments" className={link}>{Icon.deploy}Deployments</NavLink>
           <NavLink to="/compare" className={link}>{Icon.compare}Compare</NavLink>
+          <NavLink to="/developers" className={link}>{Icon.runs}Developers (SDK, RL)</NavLink>
           <div className="group">Share GPUs</div>
           <NavLink to="/provide" className={link}>{Icon.provide}Provide GPUs</NavLink>
           <NavLink to="/pool" className={link}>{Icon.pool}GPU pool</NavLink>
@@ -54,6 +56,7 @@ function Shell() {
           <Route path="/deployments" element={<DeploymentsPage />} />
           <Route path="/compare" element={<ComparePage />} />
           <Route path="/ledger" element={<LedgerPage />} />
+          <Route path="/developers" element={<DevelopersPage />} />
           <Route path="*" element={<Navigate to="/train" replace />} />
         </Routes>
       </main>

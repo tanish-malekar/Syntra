@@ -82,6 +82,8 @@ export default function ModelsPage() {
               <header>
                 <div><h2 style={{ margin: 0 }}>{m.name}</h2><span className="small muted">{m.base_model} · {new Date(m.created_at).toLocaleString()}</span></div>
                 <div className="row">
+                  {m.method === "dpo" && <Chip tone="info">DPO</Chip>}
+                  {m.method === "session" && <Chip tone="info">RL (SDK)</Chip>}
                   {m.weight_bits === 4 && <Chip tone="info">QLoRA 4-bit</Chip>}
                   {m.deployed ? <Chip tone="good" pulse>Deployed</Chip> : <Chip tone="plain">Not deployed</Chip>}
                 </div>

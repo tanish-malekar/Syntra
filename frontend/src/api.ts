@@ -47,7 +47,9 @@ export interface Gpu {
 }
 export interface GpuClass { id: number; name: string; price_per_hour: number; device_hint: string }
 export interface BaseModel { id: number; name: string; hf_id: string; family: string; num_layers: number; hidden_size: number; per_layer_memory_mb: number }
-export interface Dataset { id: number; name: string; num_rows: number; builtin: boolean; has_heldout: boolean; created_at: string }
+export interface Dataset { id: number; name: string; num_rows: number; builtin: boolean; has_heldout: boolean; format: "text" | "preference"; created_at: string }
+export interface ApiKeyInfo { id: number; label: string; created_at: string; last_used_at: string | null; revoked: boolean; key?: string }
+export interface RlSession { id: number; status: string; ready: boolean; base_model: string; config: Record<string, unknown>; job: Job }
 export interface Stage {
   gpu_id: number; gpu_name: string; gpu_class: string; device: string; provider: string; region: string;
   layer_start: number; layer_end: number; memory_needed_mb: number; free_memory_mb: number; price_per_hour: number;
@@ -71,7 +73,7 @@ export interface EvalScores {
 }
 export interface Model {
   id: number; name: string; base_model: string; base_model_id: number; job_id: number | null; created_at: string;
-  scores: EvalScores; deployed: boolean; weight_bits: WeightBits;
+  scores: EvalScores; deployed: boolean; weight_bits: WeightBits; method: "sft" | "dpo" | "session"; parent_model_id: number | null;
 }
 export interface Deployment {
   id: number; model_kind: "base" | "finetuned"; model_name: string; base_model: string; finetuned_model_id: number | null;
@@ -92,6 +94,7 @@ export type WeightBits = 16 | 4;
 export interface JobInput {
   base_model_id: number; dataset_id: number; requested_gpus: number | null; trusted_only: boolean; steps: number;
   batch_size?: number; seq_len?: number; lr?: number; rank?: number; weight_bits?: WeightBits; name?: string;
+  method?: "sft" | "dpo"; beta?: number; init_model_id?: number | null;
 }
 
 // ---------------------------------------------------------------------------------------------- calls
@@ -151,6 +154,12 @@ export const api = {
     post<{ prompt: string; base: Generation; finetuned: Generation; sampled: boolean }>("/compare", {
       ...params, base_deployment_id: baseId, tuned_deployment_id: tunedId,
     }),
+
+  apiKeys: () => get<ApiKeyInfo[]>("/api-keys"),
+  createApiKey: (label: string) => post<ApiKeyInfo>("/api-keys", { label }),
+  revokeApiKey: (id: number) => del(`/api-keys/${id}`),
+  sessions: () => get<RlSession[]>("/sessions"),
+  closeSession: (id: number, saveAs: string | null) => post<{ ok: boolean; model_id: number | null }>(`/sessions/${id}/close`, { save_as: saveAs }),
 
   earnings: () => get<Ledger>("/ledger/earnings"),
   costs: () => get<Ledger>("/ledger/costs"),
