@@ -28,13 +28,15 @@ final class AppModel: ObservableObject {
     private var wantShared = UserDefaults.standard.bool(forKey: "wantShared")
     private var autoPausedForBattery = false
 
-    var token: String? { Keychain.load(account: serverText) }
+    /// Read from the Keychain once (after the window is up) and cached: every Keychain read can make macOS ask the user.
+    @Published private(set) var token: String?
+    private var tokenLoaded = false
     var server: URL? { URL(string: serverText.trimmingCharacters(in: .whitespaces)) }
     var signedIn: Bool { token != nil }
 
     init() {
         agent.onExit = { [weak self] exit in self?.agentExited(exit) }
-        share = signedIn ? .notSharing : .signedOut
+        share = .signedOut
         timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refresh() }
         }
@@ -42,6 +44,10 @@ final class AppModel: ObservableObject {
             Task { @MainActor in self?.flash = "Woke up: reconnecting…"; await self?.refresh(forceUsage: true) }
         }
         Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 300_000_000)  // let the window appear before any Keychain access
+            token = Keychain.load(account: serverText)
+            tokenLoaded = true
+            share = signedIn ? .notSharing : .signedOut
             if signedIn && wantShared { await startSharing() } else { await refresh(forceUsage: true) }
         }
     }
@@ -59,6 +65,7 @@ final class AppModel: ObservableObject {
         do {
             let paired = try await client.pair(email: email, password: password, machineId: Machine.id, machineName: Machine.name)
             try Keychain.save(paired.token, account: serverText)
+            token = paired.token
             UserDefaults.standard.set(serverText, forKey: "server")
             UserDefaults.standard.set(email, forKey: "email")
             UserDefaults.standard.set(useRelay, forKey: "relay")
@@ -74,6 +81,7 @@ final class AppModel: ObservableObject {
         if let token, let server { try? await PlatformClient(server: server).unpair(token: token) }  // the agent sees 401 and stops
         await stopSharing(now: true)
         Keychain.delete(account: serverText)
+        token = nil
         usage = nil; status = nil
         share = .signedOut
     }
@@ -132,6 +140,7 @@ final class AppModel: ObservableObject {
         switch exit {
         case .revoked:
             Keychain.delete(account: serverText)
+            token = nil
             share = .signedOut
             flash = "This Mac was signed out (token revoked on the website). Sign in again to share."
         case .alreadyRunning:
@@ -145,6 +154,7 @@ final class AppModel: ObservableObject {
 
     // MARK: polling
     func refresh(forceUsage: Bool = false) async {
+        guard tokenLoaded else { return }
         tick += 1
         let running = control.info() != nil
         if running {

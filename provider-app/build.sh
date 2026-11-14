@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build SyntraProvider.app (menu bar only, no Dock icon) into provider-app/dist/.
+# Build SyntraProvider.app (window + Dock icon + menu bar icon) into provider-app/dist/.
 #   ./build.sh            release build
 #   ./build.sh --open     build and launch
 set -euo pipefail
@@ -20,11 +20,15 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
-  <key>LSUIElement</key><true/>
+  <key>LSUIElement</key><false/>
   <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/><key>NSAllowsArbitraryLoads</key><true/></dict>
 </dict></plist>
 PLIST
-codesign --force --sign - "$APP" >/dev/null 2>&1 || true   # ad-hoc signature so Keychain and login items work locally
+# Sign with a stable identity when there is one (an ad-hoc signature changes on every build, and macOS then asks for the
+# login password before the app may read its own Keychain item). Override with SYNTRA_SIGN_IDENTITY.
+IDENTITY="${SYNTRA_SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Apple Development|Developer ID Application/ {print $2; exit}')}"
+codesign --force --sign "${IDENTITY:--}" "$APP" >/dev/null 2>&1 || codesign --force --sign - "$APP" >/dev/null 2>&1 || true
+echo "Signed with: ${IDENTITY:-ad-hoc}"
 echo "Built $APP"
 [ "${1:-}" = "--open" ] && open "$APP"
 exit 0
