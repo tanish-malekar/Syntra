@@ -1,6 +1,8 @@
 """FastAPI application factory."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import asyncio
 import logging
 from contextlib import asynccontextmanager
@@ -12,6 +14,7 @@ from sqlmodel import Session
 
 from app.agent_hub import AgentHub
 from app.relay_hub import RelayHub
+from app.web import WebsiteMiddleware
 from app.api import (agent, agent_ws, api_keys, auth, deployments, diloco, events, files, install, jobs, ledger, pool, provider_app,
                      providers, sessions)
 from app.config import Settings
@@ -71,6 +74,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     for module in (auth, providers, agent, agent_ws, install, pool, ledger, jobs, deployments, files, events, provider_app, sessions, api_keys, diloco):
         app.include_router(module.router)
+
+    if settings.web_dir and (Path(settings.web_dir) / "index.html").is_file():
+        app.add_middleware(WebsiteMiddleware, web_dir=Path(settings.web_dir))
 
     @app.get("/health", tags=["meta"])
     def health():
