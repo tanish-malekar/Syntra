@@ -141,8 +141,9 @@ def build_plan(request: Request, session: Session, base_model_id: int, requested
     if method == "diloco":
         spec = scheduler.model_spec(base, full_ft=True)
     try:
-        plan = (planner.make_replica_plan(spec, [e.candidate() for e in eligible], requested_gpus or 1) if method == "diloco"
-                else planner.make_plan(spec, [e.candidate() for e in eligible], requested_gpus))
+        cands = [e.candidate() for e in eligible]
+        plan = (planner.make_replica_plan(spec, cands, requested_gpus or planner.auto_replicas(spec, cands)) if method == "diloco"
+                else planner.make_plan(spec, cands, requested_gpus))
     except ValueError as exc:
         raise HTTPException(422, str(exc))
     if plan is None:
@@ -292,6 +293,12 @@ async def create_job(body: JobIn, request: Request, user: User = Depends(current
             raise HTTPException(422, "Full fine-tuning starts from a base model")
         if body.lr > 1e-3:
             raise HTTPException(422, "lr is too high for full fine-tuning (use about 1e-5 to 1e-4)")
+    requested_gpus = body.requested_gpus
+    if body.method == "diloco" and requested_gpus is None:
+        # the replica count fixes how the data is sharded, so automatic selection is resolved once, now
+        timeout = request.app.state.settings.heartbeat_timeout_seconds
+        cands = [e.candidate() for e in scheduler.eligible_gpus(session, timeout, body.trusted_only)]
+        requested_gpus = planner.auto_replicas(scheduler.model_spec(base, full_ft=True), cands)
     start = init_adapter(session, user, base, body.init_model_id)
     config = {"dataset_id": dataset.id, "dataset_path": dataset.path, "heldout_path": dataset.heldout_path, "steps": body.steps,
               "batch_size": body.batch_size, "seq_len": body.seq_len, "lr": body.lr, "rank": body.rank,
@@ -299,7 +306,7 @@ async def create_job(body: JobIn, request: Request, user: User = Depends(current
               "init_model_id": body.init_model_id, "inner_steps": body.inner_steps, "outer_lr": body.outer_lr,
               "outer_momentum": body.outer_momentum,
               "model_name": body.name.strip() or f"{base.name} {({'dpo': 'DPO', 'diloco': 'full fine-tune'}).get(body.method, 'fine-tuned')}"}
-    job = Job(owner_id=user.id, kind="train", status="queued", base_model_id=base.id, requested_gpus=body.requested_gpus,
+    job = Job(owner_id=user.id, kind="train", status="queued", base_model_id=base.id, requested_gpus=requested_gpus,
               trusted_only=body.trusted_only, dataset_path=dataset.path, config_json=json.dumps(config))
     session.add(job)
     session.commit()

@@ -138,6 +138,16 @@ def make_plan(model: ModelSpec, cands: list[Candidate], requested_gpus: int | No
     return None
 
 
+AUTO_REPLICAS_MAX = 4
+AUTO_REPLICAS_WHEN_NONE_FIT = 2  # nothing fits now: queue for two replicas, the smallest set that is data parallel
+
+
+def auto_replicas(model: ModelSpec, cands: list[Candidate], cap: int = AUTO_REPLICAS_MAX) -> int:
+    """Automatic DiLoCo replica count: every idle GPU that can hold a full-fine-tuning replica, up to `cap`."""
+    fitting = sum(1 for c in cands if capacity_layers(model, c.free_memory_mb) >= model.num_layers)
+    return min(cap, fitting) if fitting else AUTO_REPLICAS_WHEN_NONE_FIT
+
+
 def make_replica_plan(model: ModelSpec, cands: list[Candidate], replicas: int) -> Plan | None:
     """Data parallelism (DiLoCo): `replicas` GPUs that each hold the whole model. Stage i is replica slot i (layer_start=i):
     a replacement lease inherits its slot, and with it the dead replica's data shard."""

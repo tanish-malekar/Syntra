@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { API, api, type AgentTokenInfo, type Gpu, type Ledger, type Provider } from "../api";
-import { CopyBox, ErrorBox, GpuChip, Chip } from "../components/ui";
+import { Icon } from "../components/icons";
+import { CopyBox, ErrorBox, GpuChip, Chip, PageHeader } from "../components/ui";
 import { ago, mb, money } from "../format";
 import { useLive } from "../state";
 
@@ -50,7 +51,7 @@ function ProviderCard({ provider }: { provider: Provider }) {
           <strong>Copy this now.</strong> The token is shown once.
           <p className="small" style={{ margin: "8px 0" }}>Paste this in a terminal on the machine (Mac or Linux with an NVIDIA GPU). It installs what is needed the first time and
             adds the machine's GPUs to the pool. Leave the window open; Ctrl-C to leave.</p>
-          <CopyBox text={joinCommand(base, fresh)} />
+          <CopyBox prompt text={joinCommand(base, fresh)} />
           <p className="small" style={{ marginTop: 8 }}>Needs Python 3.12 (on a Mac: <span className="mono">brew install python@3.12</span>). No ports to open, any network.</p>
         </div>
       )}
@@ -93,10 +94,7 @@ export default function ProvidePage() {
 
   return (
     <div className="stack">
-      <div>
-        <h1>Share your GPUs</h1>
-        <p className="muted">Lend idle GPUs to the pool, as an individual or as a data center. You earn for every GPU-hour they are used (simulated payments).</p>
-      </div>
+      <PageHeader icon={Icon.provide} tone="green" title="Become a provider" subtitle="Lend idle GPUs to the pool, as an individual or as a data center. You earn for every GPU-hour they are used (simulated payments)." />
       <ErrorBox error={error} />
       {earnings && (
         <div className="stats">

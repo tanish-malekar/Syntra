@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 
 from app.services.planner import (
-    RUNTIME_OVERHEAD_MB, Candidate, ModelSpec, capacity_layers, make_plan, order_candidates, replacement_candidate,
-    split_layers, stage_memory_mb,
+    RUNTIME_OVERHEAD_MB, Candidate, ModelSpec, auto_replicas, capacity_layers, make_plan, make_replica_plan, order_candidates,
+    replacement_candidate, split_layers, stage_memory_mb,
 )
 
 TINY = ModelSpec(num_layers=22, per_layer_memory_mb=100)
@@ -112,3 +112,14 @@ def test_4bit_fits_a_model_on_fewer_gpus():
     laptops = [cand(i, free=1300, machine=i) for i in range(4)]  # 8 float16 layers each, 23 in 4-bit
     assert len(make_plan(TINY, laptops).stages) == 3
     assert len(make_plan(QLORA, laptops).stages) == 1
+
+
+def test_automatic_diloco_replicas_use_every_gpu_that_fits_up_to_four():
+    full = ModelSpec(num_layers=22, per_layer_memory_mb=800)  # needs 22 * 800 + overhead per replica
+    big, small = 24000, 4000
+    assert auto_replicas(full, [cand(1, big), cand(2, big), cand(3, small)]) == 2  # the small GPU cannot hold a replica
+    assert auto_replicas(full, [cand(i, big) for i in range(1, 8)]) == 4  # capped
+    assert auto_replicas(full, [cand(1, big)]) == 1
+    assert auto_replicas(full, [cand(1, small)]) == 2  # nothing fits now: queue for two
+    plan = make_replica_plan(full, [cand(1, big), cand(2, big), cand(3, small)], auto_replicas(full, [cand(1, big), cand(2, big), cand(3, small)]))
+    assert plan is not None and [s.gpu_id for s in plan.stages] == [1, 2]

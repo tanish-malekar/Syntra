@@ -1,7 +1,8 @@
 import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type Deployment, type GenerateParams, type Generation } from "../api";
-import { Chip, ErrorBox, StatusChip, useToast } from "../components/ui";
+import { Icon } from "../components/icons";
+import { Chip, EmptyState, ErrorBox, PageHeader, StatusChip, useToast } from "../components/ui";
 import { layersLabel } from "../format";
 import { useLive } from "../state";
 
@@ -73,12 +74,10 @@ export default function DeploymentsPage() {
   const ended = deps?.filter((d) => d.status === "stopped" || d.status === "failed") ?? [];
   return (
     <div className="stack">
-      <div className="row spread">
-        <div><h1>Deployments</h1><p className="muted">Models served on GPUs from the pool. Stop a deployment to give its GPUs back.</p></div>
-        <Link to="/models"><button className="primary">Deploy a model</button></Link>
-      </div>
+      <PageHeader icon={Icon.deploy} tone="violet" title="Deployments" subtitle="Models served on GPUs from the pool. Stop a deployment to give its GPUs back."
+        actions={<Link to="/models"><button className="primary">{Icon.plus}Deploy a model</button></Link>} />
       {deps === null ? <div className="empty">Loading…</div> : live.length === 0 ? (
-        <div className="card empty"><p>Nothing is deployed right now.</p><Link to="/models">Pick a model to deploy</Link></div>
+        <div className="card"><EmptyState title="Nothing is deployed" action={<Link to="/models"><button className="honey">Pick a model to deploy</button></Link>}>Deploy a model to try it in the playground or call its endpoint.</EmptyState></div>
       ) : (
         <div className="stack">
           {live.map((d) => (

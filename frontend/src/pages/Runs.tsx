@@ -1,37 +1,61 @@
 import { useCallback, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { Icon } from "../components/icons";
 import { api, type Job, type StoredEvent } from "../api";
-import { Chip, ErrorBox, LossChart, StatusChip, Timeline, useToast } from "../components/ui";
+import { Chip, EmptyState, ErrorBox, LossChart, PageHeader, SearchBox, StatusChip, Timeline, useToast } from "../components/ui";
 import { duration, layersLabel, lossSeries, stageStates, type StageState } from "../format";
 import { useLive, useOnEvent } from "../state";
 
+const METHOD_NAME: Record<string, string> = { sft: "Supervised", dpo: "DPO", diloco: "Full (DiLoCo)" };
+
 export function RunsPage() {
+  const nav = useNavigate();
   const [jobs, setJobs] = useState<Job[] | null>(null);
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState("all");
+  const [method, setMethod] = useState("all");
   useLive(() => { api.jobs().then(setJobs).catch(() => undefined); }, 4000, (e) => e.type === "train.completed" || e.type === "train.failed" || e.type === "job.queued" || e.type === "lease.created");
+  const shown = (jobs ?? []).filter((j) => {
+    const text = `${j.id} ${String(j.config.model_name ?? "")} ${j.base_model}`.toLowerCase();
+    return (!q || text.includes(q.toLowerCase())) && (status === "all" || j.status === status)
+      && (method === "all" || String(j.config.method ?? "sft") === method);
+  });
   return (
     <div className="stack">
-      <div className="row spread">
-        <div><h1>Training runs</h1><p className="muted">Everything you have trained, running or finished.</p></div>
-        <Link to="/train"><button className="primary">New training run</button></Link>
+      <PageHeader icon={Icon.finetune} title="Fine-tuning" subtitle="View and manage your fine-tuning jobs: supervised, preference (DPO) and full fine-tuning."
+        actions={<button className="primary" onClick={() => nav("/fine-tuning/new")}>{Icon.plus}New fine-tuning job</button>} />
+      <div className="filters">
+        <SearchBox value={q} onChange={setQ} placeholder="Search jobs" />
+        <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
+          <option value="all">All statuses</option>
+          {["queued", "starting", "running", "completed", "failed", "stopped"].map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
+        </select>
+        <select value={method} onChange={(e) => setMethod(e.target.value)} aria-label="Method">
+          <option value="all">All methods</option>
+          {Object.entries(METHOD_NAME).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
       </div>
-      <div className="card">
+      <div className="card table-card">
         {jobs === null ? <div className="empty">Loading…</div> : jobs.length === 0 ? (
-          <div className="empty"><p>You have not started a run yet.</p><Link to="/train">Train your first model</Link></div>
-        ) : (
+          <EmptyState title="No fine-tuning jobs" action={<button className="honey" onClick={() => nav("/fine-tuning/new")}>Get started</button>}>
+            You have not run any fine-tuning jobs yet. Pick a model and a dataset, and the pool does the rest.
+          </EmptyState>
+        ) : shown.length === 0 ? <div className="empty">No job matches these filters.</div> : (
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Run</th><th>Model</th><th>GPUs</th><th>Progress</th><th>Status</th><th>Started</th></tr></thead>
+              <thead><tr><th>Job</th><th>Base model</th><th>Method</th><th>GPUs</th><th>Progress</th><th>Status</th><th>Started</th></tr></thead>
               <tbody>
-                {jobs.map((j) => {
+                {shown.map((j) => {
                   const active = j.leases.filter((l) => l.active).length || j.leases.length;
                   const steps = Number(j.config.steps ?? 0);
                   const step = j.last_step.step ?? 0;
                   return (
-                    <tr key={j.id}>
-                      <td><Link to={`/runs/${j.id}`}><strong>#{j.id} {String(j.config.model_name ?? "")}</strong></Link></td>
+                    <tr key={j.id} className="link" onClick={() => nav(`/fine-tuning/${j.id}`)}>
+                      <td><Link to={`/fine-tuning/${j.id}`} onClick={(e) => e.stopPropagation()}><strong>#{j.id} {String(j.config.model_name ?? "")}</strong></Link></td>
                       <td>{j.base_model}</td>
+                      <td><span className="row tight">{METHOD_NAME[String(j.config.method ?? "sft")] ?? "Supervised"}{Number(j.config.weight_bits) === 4 && <Chip tone="plain">4-bit</Chip>}</span></td>
                       <td>{active || "–"}</td>
-                      <td className="mono">{j.status === "queued" ? `queue position ${j.queue_position}` : steps ? `${step} / ${steps}${j.last_step.loss !== undefined ? ` · loss ${j.last_step.loss.toFixed(3)}` : ""}` : "–"}</td>
+                      <td className="mono">{j.status === "queued" ? `queue #${j.queue_position}` : steps ? `${step} / ${steps}${j.last_step.loss !== undefined ? ` · loss ${j.last_step.loss.toFixed(3)}` : ""}` : "–"}</td>
                       <td><StatusChip status={j.status} /></td>
                       <td className="small muted">{new Date(j.created_at).toLocaleString()}</td>
                     </tr>
@@ -51,6 +75,7 @@ const STATE_TONE: Record<StageState, "info" | "good" | "bad" | "warn"> = { start
 
 export default function RunPage() {
   const id = Number(useParams().id);
+  const nav = useNavigate();
   const toast = useToast();
   const [job, setJob] = useState<Job | null>(null);
   const [events, setEvents] = useState<StoredEvent[]>([]);
@@ -89,16 +114,13 @@ export default function RunPage() {
 
   return (
     <div className="stack">
-      <div className="row spread">
-        <div>
-          <div className="row"><h1 style={{ margin: 0 }}>Run #{job.id} · {String(job.config.model_name ?? job.base_model)}</h1><StatusChip status={job.status} />{Number(job.config.weight_bits) === 4 && <Chip tone="info">QLoRA 4-bit</Chip>}</div>
-          <p className="muted">{job.base_model} · {job.requested_gpus ? `${job.requested_gpus} GPUs requested` : "GPUs chosen automatically"}{job.trusted_only ? " · trusted GPUs only" : ""}</p>
-        </div>
-        <div className="row">
-          {modelId && <Link to="/models"><button className="primary">Open the saved model</button></Link>}
-          {!done && <button className="danger" onClick={cancel}>Cancel run</button>}
-        </div>
-      </div>
+      <PageHeader back={() => nav("/fine-tuning")}
+        title={<span className="row" style={{ gap: 10 }}>Job #{job.id} · {String(job.config.model_name ?? job.base_model)}<StatusChip status={job.status} />{Number(job.config.weight_bits) === 4 && <Chip tone="info">QLoRA 4-bit</Chip>}</span>}
+        subtitle={`${job.base_model} · ${job.requested_gpus ? `${job.requested_gpus} GPUs requested` : "GPUs chosen automatically"}${job.trusted_only ? " · trusted GPUs only" : ""}`}
+        actions={<>
+          {modelId && <button className="primary" onClick={() => nav("/models")}>Open the saved model</button>}
+          {!done && <button className="danger" onClick={cancel}>Cancel job</button>}
+        </>} />
       <ErrorBox error={error} />
       {job.status === "queued" && <div className="alert warn">Waiting for GPUs: position {job.queue_position} in the queue. The run starts by itself when enough GPUs are idle.</div>}
       {job.status === "failed" && <div className="alert error"><strong>Training failed.</strong> {job.result.error || (job.result.tail ?? []).slice(-2).join(" ")}</div>}

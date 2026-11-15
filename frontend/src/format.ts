@@ -11,6 +11,11 @@ export function money(value: number): string {
 
 export function duration(seconds: number): string {
   if (seconds < 90) return `${seconds.toFixed(seconds < 10 ? 1 : 0)} s`;
+  if (seconds >= 3600) {
+    const h = Math.floor(seconds / 3600);
+    const min = Math.round((seconds - h * 3600) / 60);
+    return min ? `${h} h ${min} min` : `${h} h`;
+  }
   const m = Math.floor(seconds / 60);
   return `${m} min ${Math.round(seconds - m * 60)} s`;
 }

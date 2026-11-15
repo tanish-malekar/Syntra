@@ -25,6 +25,8 @@ def test_diloco_job_plans_replicas_and_registers_a_full_model(tmp_path):
             preview = (await alice.get("/plans", params={"base_model_id": 1, "requested_gpus": 2, "method": "diloco"})).json()
             assert preview["fits"] and [s["device"] for s in preview["stages"]] == ["cuda", "cuda"]  # the 6 GB Mac cannot hold a replica
             assert all(s["memory_needed_mb"] > 22 * 100 * 4 for s in preview["stages"])     # full-FT memory, not a layer slice
+            auto = (await alice.get("/plans", params={"base_model_id": 1, "method": "diloco"})).json()
+            assert auto["fits"] and len(auto["stages"]) == 3  # automatic: every GPU that can hold a replica (the Mac cannot)
 
             job = (await alice.post("/jobs", json={**base, "requested_gpus": 2, "name": "Full FT"})).json()
             assert [(l["layer_start"], l["layer_end"]) for l in job["leases"]] == [(0, 1), (1, 2)]  # replica slots
@@ -39,6 +41,10 @@ def test_diloco_job_plans_replicas_and_registers_a_full_model(tmp_path):
 
             done = await p.wait_status(alice, job["id"], "completed", "failed", timeout=60)
             assert done["status"] == "completed", done["result"]
+            # no GPU count: the replica count is chosen once, at creation, from the GPUs that can hold a replica
+            auto_job = (await alice.post("/jobs", json={**base, "name": "Auto FT"})).json()
+            assert auto_job["requested_gpus"] == 3
+            await alice.post(f"/jobs/{auto_job['id']}/cancel")
             model = next(m for m in (await alice.get("/models")).json() if m["name"] == "Full FT")
             assert model["method"] == "full"
             from sqlmodel import Session

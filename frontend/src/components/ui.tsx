@@ -2,8 +2,10 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 import type { GpuStatus, StoredEvent } from "../api";
 import { describeEvent, type LossPoint } from "../format";
+import { Bee } from "./Bee";
+import { Icon } from "./icons";
 
-export function Chip({ tone, children, pulse }: { tone?: "good" | "bad" | "warn" | "info" | "plain"; children: ReactNode; pulse?: boolean }) {
+export function Chip({ tone, children, pulse }: { tone?: "good" | "bad" | "warn" | "info" | "plain" | "violet"; children: ReactNode; pulse?: boolean }) {
   return <span className={`chip ${tone ?? ""} ${pulse ? "pulse" : ""}`}>{children}</span>;
 }
 
@@ -20,11 +22,11 @@ export function StatusChip({ status }: { status: string }) {
   return <Chip tone={JOB_TONE[status] ?? "plain"} pulse={status === "running" || status === "starting"}>{status[0].toUpperCase() + status.slice(1)}</Chip>;
 }
 
-export function CopyBox({ text }: { text: string }) {
+export function CopyBox({ text, prompt, tall }: { text: string; prompt?: boolean; tall?: boolean }) {
   const [copied, setCopied] = useState(false);
   return (
-    <div className="codebox">
-      {text}
+    <div className={`codebox${tall ? " tall" : ""}`}>
+      {prompt && <span className="prompt">$</span>}{text}
       <button
         className="small"
         onClick={() => { void navigator.clipboard?.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
@@ -38,6 +40,70 @@ export function CopyBox({ text }: { text: string }) {
 
 export function ErrorBox({ error }: { error: string | null }) {
   return error ? <div className="alert error" role="alert">{error}</div> : null;
+}
+
+type Tone = "honey" | "rose" | "violet" | "green";
+const TILE_CLASS: Record<Tone, string> = { honey: "", rose: "rose", violet: "violet", green: "green" };
+
+export function IconTile({ icon, tone = "honey", small }: { icon: ReactNode; tone?: Tone; small?: boolean }) {
+  return <span className={`tile ${TILE_CLASS[tone]} ${small ? "sm" : ""}`}>{icon}</span>;
+}
+
+export function Tag({ children, tone = "honey" }: { children: ReactNode; tone?: Tone }) {
+  return <span className={`tag ${TILE_CLASS[tone]}`}>{children}</span>;
+}
+
+/** Page title row: icon tile, title, one-line description, actions on the right. */
+export function PageHeader({ icon, tone, title, subtitle, actions, back }: {
+  icon?: ReactNode; tone?: Tone; title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; back?: () => void;
+}) {
+  return (
+    <div className="page-head">
+      {back && <button className="back" onClick={back} aria-label="Back">{Icon.back}</button>}
+      {icon && <IconTile icon={icon} tone={tone} />}
+      <div className="text"><h1>{title}</h1>{subtitle && <p>{subtitle}</p>}</div>
+      {actions && <div className="actions">{actions}</div>}
+    </div>
+  );
+}
+
+/** Friendly empty state with the bee. */
+export function EmptyState({ title, children, action, wink }: { title: string; children?: ReactNode; action?: ReactNode; wink?: boolean }) {
+  return (
+    <div className="empty-state">
+      <Bee size={92} float wink={wink} />
+      <h3>{title}</h3>
+      {children && <p>{children}</p>}
+      {action}
+    </div>
+  );
+}
+
+/** Radio buttons drawn as cards. */
+export function Choices<T extends string>({ name, value, onChange, options, columns }: {
+  name: string; value: T; onChange: (v: T) => void; columns?: number;
+  options: { value: T; title: ReactNode; detail?: ReactNode; badge?: string; disabled?: boolean }[];
+}) {
+  return (
+    <div className="choices" role="radiogroup" style={columns ? { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` } : undefined}>
+      {options.map((o) => (
+        <label key={o.value} className={`choice ${value === o.value ? "on" : ""} ${o.disabled ? "disabled" : ""}`}>
+          <input type="radio" name={name} checked={value === o.value} disabled={o.disabled} onChange={() => onChange(o.value)} />
+          <span className="t">{o.title}{o.badge && <span className="badge">{o.badge}</span>}</span>
+          {o.detail && <span className="d">{o.detail}</span>}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+export function SearchBox({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+  return (
+    <div className="search">
+      {Icon.search}
+      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} aria-label={placeholder} />
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------------------------- toasts

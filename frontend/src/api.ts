@@ -161,6 +161,8 @@ export const api = {
   createApiKey: (label: string) => post<ApiKeyInfo>("/api-keys", { label }),
   revokeApiKey: (id: number) => del(`/api-keys/${id}`),
   sessions: () => get<RlSession[]>("/sessions"),
+  createSession: (body: { base_model_id: number; init_model_id: number | null; rank: number; weight_bits: WeightBits; requested_gpus: number | null;
+                          trusted_only: boolean; name: string }) => post<RlSession>("/sessions", body),
   closeSession: (id: number, saveAs: string | null) => post<{ ok: boolean; model_id: number | null }>(`/sessions/${id}/close`, { save_as: saveAs }),
 
   earnings: () => get<Ledger>("/ledger/earnings"),

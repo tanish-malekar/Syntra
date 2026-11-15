@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { api, type Gpu } from "../api";
-import { Chip, ErrorBox, GpuChip } from "../components/ui";
+import { Link } from "react-router-dom";
+import { Icon } from "../components/icons";
+import { Chip, EmptyState, ErrorBox, GpuChip, PageHeader } from "../components/ui";
 import { ago, mb, money } from "../format";
 import { useLive } from "../state";
 
@@ -13,10 +15,8 @@ export default function PoolPage() {
   const idleMemory = gpus?.filter((g) => g.status === "idle").reduce((a, g) => a + g.free_memory_mb, 0) ?? 0;
   return (
     <div className="stack">
-      <div>
-        <h1>GPU pool</h1>
-        <p className="muted">Every GPU shared by individuals and data centers. Training runs and deployments take idle GPUs from here automatically.</p>
-      </div>
+      <PageHeader icon={Icon.pool} title="GPU pool" subtitle="Every GPU shared by individuals and data centers. Training, RL and deployments take idle GPUs from here automatically."
+        actions={<Link to="/provide"><button className="primary">{Icon.plus}Become a provider</button></Link>} />
       <ErrorBox error={error} />
       <div className="stats">
         <div className="stat"><div className="v">{gpus?.length ?? "–"}</div><div className="k">GPUs in the pool</div></div>
@@ -25,9 +25,9 @@ export default function PoolPage() {
         <div className="stat"><div className="v">{count("offline") + count("busy_external")}</div><div className="k">Offline or busy elsewhere</div></div>
         <div className="stat"><div className="v">{mb(idleMemory)}</div><div className="k">Idle memory</div></div>
       </div>
-      <div className="card">
+      <div className="card table-card">
         {gpus === null ? <div className="empty">Loading…</div> : gpus.length === 0 ? (
-          <div className="empty"><p>No GPUs have been shared yet.</p><p><a href="/provide">Share your first GPU</a></p></div>
+          <EmptyState title="The pool is empty" action={<Link to="/provide"><button className="honey">Become a provider</button></Link>}>Any Mac or NVIDIA machine can join with one command.</EmptyState>
         ) : (
           <div className="table-wrap">
             <table>

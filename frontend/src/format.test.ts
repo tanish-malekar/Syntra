@@ -15,6 +15,8 @@ describe("formatting", () => {
     expect(duration(2.83)).toBe("2.8 s");
     expect(duration(45)).toBe("45 s");
     expect(duration(125)).toBe("2 min 5 s");
+    expect(duration(3600)).toBe("1 h");
+    expect(duration(38700)).toBe("10 h 45 min");
     expect(pct(47, 48)).toBe("98%");
     expect(pct(0, 0)).toBe("–");
     expect(layersLabel(11, 22)).toBe("layers 11–21");

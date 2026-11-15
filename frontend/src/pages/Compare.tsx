@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, type Deployment, type GenerateParams, type Model } from "../api";
-import { ErrorBox, StatusChip, useToast } from "../components/ui";
+import { Icon } from "../components/icons";
+import { EmptyState, ErrorBox, PageHeader, StatusChip, useToast } from "../components/ui";
 import { duration } from "../format";
 import { useLive } from "../state";
 import { SAMPLE_PROMPTS, SamplingControls } from "./Deployments";
@@ -14,21 +15,21 @@ export default function ComparePage() {
   const toast = useToast();
   const [models, setModels] = useState<Model[]>([]);
   const [deps, setDeps] = useState<Deployment[]>([]);
-  const [tunedGpus, setTunedGpus] = useState(2);
   const [prompt, setPrompt] = useState(SAMPLE_PROMPTS[0]);
   const [gen, setGen] = useState<GenerateParams>({ prompt: "", max_new_tokens: 28, do_sample: false });
   const [answers, setAnswers] = useState<Answers>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const modelId = Number(params.get("model")) || models[0]?.id || 0;
+  const preferred = models.find((m) => m.deployed && m.scores.status === "done") ?? models.find((m) => m.deployed) ?? models[0];
+  const modelId = Number(params.get("model")) || preferred?.id || 0;
   const model = models.find((m) => m.id === modelId) ?? null;
   const load = useCallback(() => {
     api.models().then(setModels).catch(() => undefined);
     api.deployments().then(setDeps).catch(() => undefined);
   }, []);
   useLive(load, 3000, (e) => e.type.startsWith("deploy.") || e.type === "eval.result" || e.type === "worker.online");
-  useEffect(() => { if (!params.get("model") && models[0]) setParams({ model: String(models[0].id) }, { replace: true }); }, [models, params, setParams]);
+  useEffect(() => { if (!params.get("model") && preferred) setParams({ model: String(preferred.id) }, { replace: true }); }, [preferred, params, setParams]);
 
   const alive = (d: Deployment) => d.status !== "stopped" && d.status !== "failed";
   const tuned = deps.find((d) => d.finetuned_model_id === modelId && alive(d)) ?? null;
@@ -39,8 +40,8 @@ export default function ComparePage() {
     if (!model) return;
     setError(null);
     try {
-      if (!tuned) await api.deploy({ model_kind: "finetuned", finetuned_model_id: model.id, requested_gpus: tunedGpus });
-      if (!base) await api.deploy({ model_kind: "base", base_model_id: model.base_model_id, requested_gpus: 1 });
+      if (!tuned) await api.deploy({ model_kind: "finetuned", finetuned_model_id: model.id, requested_gpus: null });
+      if (!base) await api.deploy({ model_kind: "base", base_model_id: model.base_model_id, requested_gpus: null });
       load();
     } catch (e) { setError((e as Error).message); }
   };
@@ -62,10 +63,15 @@ export default function ComparePage() {
     try { await api.evaluate(model.id, base.id, tuned.id); load(); } catch (e) { setError((e as Error).message); }
   };
 
-  if (models.length === 0) return <div className="card empty"><p>You need a fine-tuned model to compare.</p><Link to="/train">Train one</Link></div>;
+  if (models.length === 0) return (
+    <div className="stack">
+      <PageHeader icon={Icon.compare} tone="green" title="Compare" subtitle="Send the same prompt to the base model and to your trained one." />
+      <div className="card"><EmptyState title="Nothing to compare yet" action={<Link to="/fine-tuning/new"><button className="honey">Fine-tune a model</button></Link>}>You need a trained model first.</EmptyState></div>
+    </div>
+  );
   return (
     <div className="stack">
-      <div><h1>Compare with the base model</h1><p className="muted">The same prompt goes to the original model and to your fine-tuned one, both running on pool GPUs.</p></div>
+      <PageHeader icon={Icon.compare} tone="green" title="Compare with the base model" subtitle="The same prompt goes to the original model and to your trained one, both running on pool GPUs." />
       <ErrorBox error={error} />
       <div className="card stack">
         <div className="grid cols-2">
@@ -75,7 +81,7 @@ export default function ComparePage() {
               {models.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
           </div>
-          <div className="field"><label htmlFor="g">GPUs for the fine-tuned model</label><input id="g" type="number" min={1} max={22} value={tunedGpus} onChange={(e) => setTunedGpus(Math.max(1, Number(e.target.value)))} disabled={!!tuned} /><div className="hint">The base model uses 1 GPU.</div></div>
+          <div className="field"><span className="label">GPUs</span><p className="small muted" style={{ margin: 0 }}>Both models get GPUs picked automatically from the pool.</p></div>
         </div>
         <div className="row">
           <span>Fine-tuned: {tuned ? <StatusChip status={tuned.status} /> : <span className="muted">not deployed</span>}</span>
