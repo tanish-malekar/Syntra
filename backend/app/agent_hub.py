@@ -13,7 +13,7 @@ from typing import Awaitable, Callable
 
 from fastapi import WebSocket
 
-log = logging.getLogger("syntra.agent_hub")
+log = logging.getLogger("bloombee_platform.agent_hub")
 
 Listener = Callable[[int, dict], Awaitable[None] | None]
 

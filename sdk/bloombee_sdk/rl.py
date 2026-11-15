@@ -1,7 +1,7 @@
 """Ready-made training loops on a TrainingSession. Your reward function runs here, on your machine.
 
-    history = syntra.rl.grpo(tc, prompts, reward_fn, iterations=20, group_size=8)
-    history = syntra.rl.dpo(tc, pairs, beta=0.1, epochs=2)
+    history = bloombee_sdk.rl.grpo(tc, prompts, reward_fn, iterations=20, group_size=8)
+    history = bloombee_sdk.rl.dpo(tc, pairs, beta=0.1, epochs=2)
 
 reward_fn(prompt: str, completion: str, sample: Sample) -> float. Must return a finite number.
 """
@@ -11,7 +11,7 @@ import math
 import random
 from typing import Callable, Sequence
 
-from syntra.client import BadRequest, Sample, TrainingSession
+from bloombee_sdk.client import BadRequest, Sample, TrainingSession
 
 RewardFn = Callable[[str, str, Sample], float]
 

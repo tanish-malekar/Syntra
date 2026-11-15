@@ -12,14 +12,14 @@ from typing import Callable, Optional
 import httpx
 from websockets.asyncio.client import connect as ws_connect
 
-from syntra_agent import hardware
-from syntra_agent.files import ensure_model_files
-from syntra_agent.hardware import GpuInfo
-from syntra_agent.control import ControlServer
-from syntra_agent.relay import Relay
-from syntra_agent.workers import AgentConfig, WorkerManager, WorkerSpec, supports_4bit
+from bloombee_agent import hardware
+from bloombee_agent.files import ensure_model_files
+from bloombee_agent.hardware import GpuInfo
+from bloombee_agent.control import ControlServer
+from bloombee_agent.relay import Relay
+from bloombee_agent.workers import AgentConfig, WorkerManager, WorkerSpec, supports_4bit
 
-log = logging.getLogger("syntra_agent")
+log = logging.getLogger("bloombee_platform_agent")
 
 
 class AgentRevoked(RuntimeError):
@@ -40,7 +40,7 @@ class AgentSettings:
     relay: bool = False  # no inbound connections needed: GPU worker traffic is carried over the platform connection
     relay_dial: Optional[Callable[[int], tuple[str, int]]] = None  # tests only: where an incoming relayed port is dialled
     control: bool = False  # serve the local control API for the desktop app (127.0.0.1, secret in <state_dir>/agent.json)
-    state_dir: Path = field(default_factory=lambda: Path("~/.syntra").expanduser())
+    state_dir: Path = field(default_factory=lambda: Path("~/.bloombee").expanduser())
 
     @property
     def ws_url(self) -> str:

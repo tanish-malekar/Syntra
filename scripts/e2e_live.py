@@ -82,7 +82,7 @@ def cleanup():
             pass
     # context3: only processes that belong to this run (agent + workers carry the run tag in their command lines)
     try:
-        ssh.run_remote(f"pkill -u tmalekar -f 'syntra_agent.*{TAG}' || true; pkill -u tmalekar -f 'dht_prefix job.*initial_peers /ip4/127.0.0.1/tcp/{DHT_PORT}' || true; sleep 2; "
+        ssh.run_remote(f"pkill -u tmalekar -f 'bloombee_agent.*{TAG}' || true; pkill -u tmalekar -f 'dht_prefix job.*initial_peers /ip4/127.0.0.1/tcp/{DHT_PORT}' || true; sleep 2; "
                        f"pgrep -u tmalekar -f '{TAG}|initial_peers /ip4/127.0.0.1/tcp/{DHT_PORT}' | wc -l", timeout=60)
     except Exception:
         pass
@@ -92,7 +92,7 @@ TAG = f"e2e{int(time.time())}"
 
 
 def main():
-    work = Path(tempfile.mkdtemp(prefix="syntra-live-", dir=SCRATCH))
+    work = Path(tempfile.mkdtemp(prefix="bloombee-live-", dir=SCRATCH))
     py = str(ROOT / "backend/.venv/bin/python")
     if not PUBLIC_URL:
         raise SystemExit("set PUBLIC_URL to the temporary public address of the backend (port 8000)")
@@ -102,16 +102,16 @@ def main():
     rows = {int(l.split(",")[0]): (int(l.split(",")[1]), int(l.split(",")[2])) for l in r.stdout.strip().splitlines()}
     if C3_GPU not in rows or rows[C3_GPU][0] > 5 or rows[C3_GPU][1] > 1500:
         raise SystemExit(f"context3 GPU {C3_GPU} is not idle right now ({rows.get(C3_GPU)}): not running")
-    ssh.push_dir(str(ROOT / "agent"), "syntra_agent", f"{C3}/agent")
+    ssh.push_dir(str(ROOT / "agent"), "bloombee_agent", f"{C3}/agent")
     r = ssh.run_remote(f"[ -x {C3}/agent-venv/bin/python ] || /data01/tmalekar/conda-envs/bb/bin/python -m venv {C3}/agent-venv; "
                        f"export PIP_CACHE_DIR={C3}/tmp TMPDIR={C3}/tmp; {C3}/agent-venv/bin/pip install -q httpx 'websockets>=13' 2>&1 | tail -2; "
                        f"{C3}/agent-venv/bin/python -c 'import httpx, websockets; print(\"agent deps ok\")'", timeout=300)
     log("context3 ready", gpu=C3_GPU, out=r.stdout.strip()[-40:])
 
     # --- backend here; this Mac's GPU joins ----------------------------------------------------------------------------
-    env = {"SYNTRA_DB": f"sqlite:///{work}/syntra.db", "SYNTRA_BLOOMBEE_PYTHON": BB_PYTHON, "SYNTRA_BLOOMBEE_DIR": BB_DIR,
-           "SYNTRA_MODELS_DIR": str(SCRATCH / "models"), "SYNTRA_DATA_DIR": str(work / "data"), "SYNTRA_DHT_PORT": str(DHT_PORT),
-           "SYNTRA_PUBLIC_URL": PUBLIC_URL, "PYTHONPATH": str(ROOT / "backend")}
+    env = {"BLOOMBEE_DB": f"sqlite:///{work}/syntra.db", "BLOOMBEE_PYTHON": BB_PYTHON, "BLOOMBEE_DIR": BB_DIR,
+           "BLOOMBEE_MODELS_DIR": str(SCRATCH / "models"), "BLOOMBEE_DATA_DIR": str(work / "data"), "BLOOMBEE_DHT_PORT": str(DHT_PORT),
+           "BLOOMBEE_PUBLIC_URL": PUBLIC_URL, "PYTHONPATH": str(ROOT / "backend")}
     subprocess.run([py, "-m", "app.seed"], env={**os.environ, **env}, cwd=str(ROOT / "backend"), capture_output=True, check=True)
     spawn([py, "-m", "uvicorn", "app.main:app", "--port", str(BACKEND_PORT), "--log-level", "warning"], env=env, out=open(work / "backend.log", "w"), cwd=str(ROOT / "backend"))
     url = f"http://127.0.0.1:{BACKEND_PORT}"
@@ -140,7 +140,7 @@ def main():
     known.update(logins)
     (ROOT / "demo-logins.txt").write_text("".join(f"{e} {p}\n" for e, p in known.items()))
     tok_a, tok_b, tok_c = agent_token(a_owner, "MacBook A (this Mac)", "individual"), agent_token(b_owner, "MacBook B", "individual"), agent_token(lab_owner, "Stony Brook lab (context3)", "enterprise")
-    spawn([py, "-m", "syntra_agent", "--server", url, "--token", tok_a, "--bloombee-dir", BB_DIR, "--python", BB_PYTHON,
+    spawn([py, "-m", "bloombee_agent", "--server", url, "--token", tok_a, "--bloombee-dir", BB_DIR, "--python", BB_PYTHON,
            "--models-dir", str(SCRATCH / "models"), "--work-dir", str(work / "agent-a"), "--port-range", "31010-31019", "--region", "home-a"],
           env={"PYTHONPATH": str(ROOT / "agent")}, out=open(work / "agent-a.log", "w"))
     wait(lambda: len([g for g in alice.get("/gpus").json() if g["status"] == "idle"]) == 1, 60, "MacBook A in the pool")
@@ -168,7 +168,7 @@ def main():
     spawn([py, str(ROOT / "bridge/tunnel.py"), "--backend-only"], out=open(work / "tunnel.log", "w"))
     time.sleep(5)
     remote = (f"cd {C3}/agent && export HF_HOME={C3}/hf TMPDIR={C3}/tmp PYTHONPATH={C3}/agent; "
-              f"nohup {C3}/agent-venv/bin/python -m syntra_agent --server http://127.0.0.1:{BACKEND_PORT} --token {tok_c} --relay "
+              f"nohup {C3}/agent-venv/bin/python -m bloombee_agent --server http://127.0.0.1:{BACKEND_PORT} --token {tok_c} --relay "
               f"--bloombee-dir {C3}/BloomBee --python /data01/tmalekar/conda-envs/bb/bin/python --models-dir {C3}/models "
               f"--work-dir {C3}/agent-work-{TAG} --gpus {C3_GPU} --region lab-{TAG} > {C3}/out/agent_{TAG}.log 2>&1 < /dev/null & echo started")
     log("context3 agent", out=ssh.run_remote(remote).stdout.strip())

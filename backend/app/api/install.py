@@ -19,11 +19,11 @@ router = APIRouter(tags=["install"])
 REPO = BACKEND_DIR.parent
 JOIN_SCRIPT = Path(__file__).resolve().parent.parent / "install" / "join.sh"
 REQUIREMENTS = REPO / "experiments" / "bloombee-mac" / "requirements.txt"
-AGENT_DIR = REPO / "agent" / "syntra_agent"
+AGENT_DIR = REPO / "agent" / "bloombee_agent"
 
 
 def public_base(request: Request) -> str:
-    """The address providers should use: SYNTRA_PUBLIC_URL, else the URL the caller used (honours a tunnel's forwarded headers)."""
+    """The address providers should use: BLOOMBEE_PUBLIC_URL, else the URL the caller used (honours a tunnel's forwarded headers)."""
     configured = request.app.state.settings.public_url
     if configured:
         return configured
@@ -57,5 +57,5 @@ def agent_archive():
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
         for path in sorted(AGENT_DIR.rglob("*.py")):
-            tar.add(path, arcname=f"syntra_agent/{path.relative_to(AGENT_DIR)}")
+            tar.add(path, arcname=f"bloombee_agent/{path.relative_to(AGENT_DIR)}")
     return Response(buffer.getvalue(), media_type="application/gzip")

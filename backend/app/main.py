@@ -24,7 +24,7 @@ from app.events import EventService
 from app.services.orchestrator import Orchestrator
 from app.services.pool import sweep_offline
 
-log = logging.getLogger("syntra")
+log = logging.getLogger("bloombee_platform")
 
 
 def _sweep_once(app: FastAPI) -> None:
@@ -57,7 +57,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 task.cancel()
             await app.state.orchestrator.stop()
 
-    app = FastAPI(title="Syntra", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="BloomBee", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.engine = make_engine(settings.database_url)
     init_db(app.state.engine)

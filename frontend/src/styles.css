@@ -1,4 +1,4 @@
-/* Syntra: light theme only. */
+/* BloomBee: light theme only. */
 :root {
   --bg: #f7f8fc;
   --surface: #ffffff;
@@ -52,7 +52,7 @@ h1 + p.muted { font-size: 15.5px; max-width: 70ch; }
 .shell { display: grid; grid-template-columns: 252px 1fr; min-height: 100vh; }
 .sidebar { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); border-right: 1px solid var(--border); padding: 22px 14px; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; letter-spacing: -0.02em; padding: 0 10px 20px; }
-.brand .logo { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: var(--grad); color: #fff; font-size: 17px; font-weight: 800; box-shadow: 0 6px 16px -4px rgba(91, 91, 240, 0.6); }
+.brand .logo { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: linear-gradient(135deg, #ffe08a, #ffb627); color: #fff; font-size: 19px; line-height: 1; box-shadow: 0 6px 16px -4px rgba(255, 182, 39, 0.7); }
 .brand span:not(.logo) { color: inherit; }
 .nav a { display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: 10px; color: #3a4262; font-weight: 550; margin-bottom: 2px; transition: background 0.15s, color 0.15s; }
 .nav a .ico { color: #8a92ad; transition: color 0.15s; }

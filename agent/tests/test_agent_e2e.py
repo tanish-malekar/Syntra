@@ -18,9 +18,9 @@ from app.main import create_app
 from app.db import utcnow
 from app.models import Gpu, Job, Lease, User
 from app.seed import seed_reference_data
-from syntra_agent.client import Agent, AgentRevoked, AgentSettings
-from syntra_agent.hardware import GpuInfo
-from syntra_agent.workers import AgentConfig, WorkerManager
+from bloombee_agent.client import Agent, AgentRevoked, AgentSettings
+from bloombee_agent.hardware import GpuInfo
+from bloombee_agent.workers import AgentConfig, WorkerManager
 
 FAKE_WORKER = Path(__file__).resolve().parent / "fake_worker.py"
 PASSWORD = "correct horse battery"
@@ -324,7 +324,7 @@ def test_a_relayed_agent_gets_its_ports_and_traffic_flows_through_the_platform_c
 
 async def control_call(agent: Agent, method: str, path: str, body: dict | None = None, secret: str | None = None):
     async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{agent.control.port}") as c:
-        return await c.request(method, path, json=body, headers={"X-Syntra-Secret": secret or agent.control.secret})
+        return await c.request(method, path, json=body, headers={"X-BloomBee-Secret": secret or agent.control.secret})
 
 
 def test_control_api_pause_drain_resume_and_quit(tmp_path):
@@ -392,7 +392,7 @@ def test_token_revoked_while_running_stops_the_agent(tmp_path):
 
 
 def test_instance_lock_allows_one_agent_and_takes_over_a_stale_lock(tmp_path):
-    from syntra_agent.control import AlreadyRunning, InstanceLock
+    from bloombee_agent.control import AlreadyRunning, InstanceLock
     lock = InstanceLock(tmp_path)
     lock.acquire()
     (tmp_path / "agent.lock").write_text("1")          # pid 1 (launchd) is alive: a live other agent

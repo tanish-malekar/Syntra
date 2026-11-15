@@ -16,7 +16,7 @@ def test_signup_logs_in_with_httponly_lax_cookie(app):
     assert r.status_code == 201
     assert r.json()["email"] == "new@example.com"  # normalized
     set_cookie = r.headers["set-cookie"].lower()
-    assert "httponly" in set_cookie and "samesite=lax" in set_cookie and "syntra_session=" in set_cookie
+    assert "httponly" in set_cookie and "samesite=lax" in set_cookie and "bloombee_session=" in set_cookie
     assert c.get("/auth/me").json()["email"] == "new@example.com"
 
 
@@ -42,7 +42,7 @@ def test_password_is_stored_as_argon2_hash(app, db):
 
 def test_session_token_is_stored_hashed(app, db):
     c = signup(app, "tok@example.com")
-    cookie = c.cookies.get("syntra_session")
+    cookie = c.cookies.get("bloombee_session")
     rows = db.exec(select(AuthSession)).all()
     assert rows and all(r.token_hash != cookie for r in rows)
 
@@ -66,11 +66,11 @@ def test_login_success_sets_a_new_session(app):
 
 def test_logout_revokes_the_session_server_side(app):
     c = signup(app, "out@example.com")
-    stolen = c.cookies.get("syntra_session")
+    stolen = c.cookies.get("bloombee_session")
     assert c.post("/auth/logout").status_code == 204
     assert c.get("/auth/me").status_code == 401
     replay = TestClient(app)
-    replay.cookies.set("syntra_session", stolen)
+    replay.cookies.set("bloombee_session", stolen)
     assert replay.get("/auth/me").status_code == 401  # the old cookie value no longer works
 
 

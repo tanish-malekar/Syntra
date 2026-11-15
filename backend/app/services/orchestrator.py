@@ -30,7 +30,7 @@ from app.models import BaseModel, Deployment, FineTunedModel, Gpu, Job, Lease
 from app.services import scheduler
 from app.services.pool import effective_status
 
-log = logging.getLogger("syntra.orchestrator")
+log = logging.getLogger("bloombee_platform.orchestrator")
 RUNNER = Path(__file__).resolve().parent.parent / "runner" / "swarm_runner.py"
 DILOCO_RUNNER = Path(__file__).resolve().parent.parent / "runner" / "diloco_coordinator.py"
 
@@ -205,7 +205,7 @@ class Orchestrator:
         try:
             await asyncio.wait_for(run.dht_ready.wait(), 120)
         except asyncio.TimeoutError:
-            run.error = "swarm runner did not start (is SYNTRA_BLOOMBEE_PYTHON set to an environment with BloomBee?)"
+            run.error = "swarm runner did not start (is BLOOMBEE_PYTHON set to an environment with BloomBee?)"
             run.runner.terminate()
         else:
             def mark_running(s):

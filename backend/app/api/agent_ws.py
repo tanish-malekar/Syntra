@@ -10,7 +10,7 @@ from sqlmodel import Session
 
 from app.deps import agent_for_bearer
 
-log = logging.getLogger("syntra.agent_ws")
+log = logging.getLogger("bloombee_platform.agent_ws")
 router = APIRouter(tags=["agent"])
 
 

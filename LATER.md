@@ -108,7 +108,7 @@ Things we decided to do later, parked ideas, and known open issues. Finished ite
       LoRA fault tolerance.
 
 ## Pip's Run (mario/) leftovers
-- [ ] Syntra integration: run the Mario RL training as a Syntra job on leased GPUs (the demo is standalone today; you chose
+- [ ] BloomBee integration: run the Mario RL training as a BloomBee job on leased GPUs (the demo is standalone today; you chose
       to leave it standalone on 2026-11-14).
 - [ ] The real NES game (momentum, frame-tight timing, RAM-decoded state) once our own platformer works.
 - [ ] Remaining 2.5%: all enemy collisions after the tower (tile ~170), between the first pipes (45-47) and under the
@@ -132,7 +132,7 @@ Things we decided to do later, parked ideas, and known open issues. Finished ite
 - 2026-11-12: backend M1-2 built (auth, data model, pool/provider API, events, ledger): 54 tests + 15 live checks pass.
 - 2026-11-12: real full e2e PASSED (scripts/e2e_real.py full); two-machine e2e PASSED (scripts/e2e_context3.py).
 - 2026-11-12: platform built end to end (README); agent file delivery; replacement-waiting event.
-- 2026-11-12: serve-path fail-over and download-replacement tested; scripts moved into Syntra/experiments.
+- 2026-11-12: serve-path fail-over and download-replacement tested; scripts moved into BloomBee/experiments.
 - 2026-11-12: full fine-tuning added as a later item.
 - 2026-11-12: QLoRA kept as a later item with the steps needed.
 - 2026-11-12: risk pass: 3 stages and frozen-worker fail-over verified; QLoRA/4-bit found unavailable; Qwen3
@@ -146,7 +146,7 @@ Things we decided to do later, parked ideas, and known open issues. Finished ite
 - 2026-11-14: QLoRA (4-bit base) built and measured (TinyLlama, 2 workers: same loss curve as FP16, ~360 MB vs ~1150 MB GPU
   memory per worker during training, steps ~2x slower); provider desktop app (ROADMAP.md stage 2); leaked-semaphore fix; a worker
   that crashes while starting is now killed and reported (`failed_to_start`) instead of hanging its job.
-- 2026-11-14: Stage 3 (RL: managed DPO, sessions API, `syntra` SDK with GRPO/PPO/DPO) and Stage 4 (DiLoCo full fine-tuning,
+- 2026-11-14: Stage 3 (RL: managed DPO, sessions API, `bloombee_sdk` SDK with GRPO/PPO/DPO) and Stage 4 (DiLoCo full fine-tuning,
   real local run passed: loss 9.04 -> 0.90, killed replica replaced in 4.6 s) built. AWS CLI set up; spot blocked on the
   account (see Platform).
 - 2026-11-14: Rohan's branch `feature/qlora-rl-diloco-app` merged into `main`; BloomBee `qlora-4bit` merged into `mac-mps-ft`.

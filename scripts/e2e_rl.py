@@ -22,11 +22,11 @@ import httpx
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "sdk"))
-import syntra  # noqa: E402
+import bloombee_sdk  # noqa: E402
 
 SCRATCH = Path(os.environ["SCRATCH"])
 BB_PYTHON = os.environ["BB_PYTHON"]
-BB_DIR = os.environ.get("BLOOMBEE_DIR", str(Path.home() / ".syntra/BloomBee"))
+BB_DIR = os.environ.get("BLOOMBEE_DIR", str(Path.home() / ".bloombee/BloomBee"))
 WEIGHT_BITS = int(os.environ.get("WEIGHT_BITS", 16))
 ITERS = int(os.environ.get("ITERS", 8))
 PASSWORD = "correct horse battery"
@@ -66,12 +66,12 @@ def wait(predicate, timeout, what):
 
 
 def main():
-    work = Path(tempfile.mkdtemp(prefix="syntra-rl-", dir=SCRATCH))
+    work = Path(tempfile.mkdtemp(prefix="bloombee-rl-", dir=SCRATCH))
     port = free_port()
     url = f"http://127.0.0.1:{port}"
     py = str(ROOT / "backend/.venv/bin/python")
-    env = {"SYNTRA_DB": f"sqlite:///{work}/syntra.db", "SYNTRA_BLOOMBEE_PYTHON": BB_PYTHON, "SYNTRA_BLOOMBEE_DIR": BB_DIR,
-           "SYNTRA_MODELS_DIR": str(SCRATCH / "models"), "SYNTRA_DATA_DIR": str(work / "data"), "PYTHONPATH": str(ROOT / "backend")}
+    env = {"BLOOMBEE_DB": f"sqlite:///{work}/syntra.db", "BLOOMBEE_PYTHON": BB_PYTHON, "BLOOMBEE_DIR": BB_DIR,
+           "BLOOMBEE_MODELS_DIR": str(SCRATCH / "models"), "BLOOMBEE_DATA_DIR": str(work / "data"), "PYTHONPATH": str(ROOT / "backend")}
     subprocess.run([py, "-m", "app.seed"], env={**os.environ, **env}, cwd=str(ROOT / "backend"), capture_output=True, check=True)
     spawn([py, "-m", "uvicorn", "app.main:app", "--port", str(port), "--log-level", "warning"], env=env,
           out=open(work / "backend.log", "w"), cwd=str(ROOT / "backend"))
@@ -85,14 +85,14 @@ def main():
     alice, provider = new_user("alice"), new_user("provider")
     pid = provider.post("/providers", json={"name": "Mac lab", "type": "individual"}).json()["id"]
     token = provider.post(f"/providers/{pid}/agent-tokens", json={"label": "m4"}).json()["token"]
-    spawn([py, "-m", "syntra_agent", "--server", url, "--token", token, "--simulated", "--sim-count", "2", "--sim-memory-gb", "6",
+    spawn([py, "-m", "bloombee_agent", "--server", url, "--token", token, "--simulated", "--sim-count", "2", "--sim-memory-gb", "6",
            "--bloombee-dir", BB_DIR, "--python", BB_PYTHON, "--models-dir", str(SCRATCH / "models"), "--work-dir", str(work / "agent")],
           env={"PYTHONPATH": str(ROOT / "agent")}, out=open(work / "agent.log", "w"))
     wait(lambda: len([g for g in alice.get("/gpus").json() if g["status"] == "idle"]) == 2, 60, "2 idle GPUs")
     key = alice.post("/api-keys", json={"label": "e2e"}).json()["key"]
 
     # ---- 1. GRPO through the SDK ------------------------------------------------------------------------------------
-    client = syntra.Client(api_key=key, base_url=url, timeout=1800)
+    client = bloombee_sdk.Client(api_key=key, base_url=url, timeout=1800)
     t = time.monotonic()
     tc = client.training_session("TinyLlama-1.1B-Chat", rank=8, weight_bits=WEIGHT_BITS, gpus=2, name="grpo e2e", timeout=900)
     log("session ready", seconds=round(time.monotonic() - t, 1), weight_bits=WEIGHT_BITS)
@@ -103,7 +103,7 @@ def main():
     def reward(prompt, completion, s):  # dense: finishing early scores higher (1.0 = EOS right away, 0 = never finished)
         return (1.0 - len(s.completion) / max_new) if s.finished else 0.0
 
-    hist = syntra.rl.grpo(tc, prompts, reward, iterations=ITERS, group_size=8, prompts_per_iteration=2, max_new_tokens=max_new,
+    hist = bloombee_sdk.rl.grpo(tc, prompts, reward, iterations=ITERS, group_size=8, prompts_per_iteration=2, max_new_tokens=max_new,
                           temperature=1.0, lr=3e-4, clip=0.2, seed=0,
                           on_iteration=lambda h: log("grpo iteration", **{k: (round(v, 4) if isinstance(v, float) else v)
                                                                          for k, v in h.items()}))
@@ -154,7 +154,7 @@ finally:
             pass
     time.sleep(3)
     sys.path.insert(0, str(ROOT / "agent"))
-    from syntra_agent.workers import kill_process_group
+    from bloombee_agent.workers import kill_process_group
     for p in procs:
         kill_process_group(p.pid)
     os._exit(1 if results.get("failed") else 0)

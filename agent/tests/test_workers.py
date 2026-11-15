@@ -5,7 +5,7 @@ import sys
 
 import pytest
 
-from syntra_agent.workers import AgentConfig, WorkerManager, WorkerSpec, build_bloombee_command, resolve_model, supports_4bit
+from bloombee_agent.workers import AgentConfig, WorkerManager, WorkerSpec, build_bloombee_command, resolve_model, supports_4bit
 from pathlib import Path
 
 FAKE_WORKER = Path(__file__).resolve().parent / "fake_worker.py"
@@ -161,9 +161,9 @@ def test_hanging_driver_does_not_block_the_agent():
     import asyncio
     import threading
     import time as _t
-    from syntra_agent.client import Agent, AgentSettings
-    from syntra_agent.hardware import GpuInfo
-    from syntra_agent.workers import AgentConfig
+    from bloombee_agent.client import Agent, AgentSettings
+    from bloombee_agent.hardware import GpuInfo
+    from bloombee_agent.workers import AgentConfig
 
     release = threading.Event()
     calls = []
@@ -220,7 +220,7 @@ def test_killing_a_worker_group_spares_the_multiprocessing_resource_tracker(tmp_
     import signal
     import subprocess
     import time
-    from syntra_agent.workers import group_members, kill_process_group
+    from bloombee_agent.workers import group_members, kill_process_group
     # a "worker" that starts a helper named like the tracker in its own group
     code = ("import subprocess, sys, time;"
             "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)', 'multiprocessing.resource' + '_tracker']);"
@@ -257,9 +257,9 @@ def test_diloco_replica_command_carries_the_lease_and_keeps_the_token_out_of_arg
                       server="http://platform:8000", token="syn_agent_secret")
     argv, env = build_bloombee_command(spec(kind="diloco", job_id=7, lease_id=42, device="cuda", device_index=1), cfg)
     flag = lambda name: argv[argv.index(name) + 1]
-    assert argv[:3] == ["/py", "-m", "syntra_agent.diloco_worker"] and flag("--job") == "7" and flag("--lease") == "42"
+    assert argv[:3] == ["/py", "-m", "bloombee_agent.diloco_worker"] and flag("--job") == "7" and flag("--lease") == "42"
     assert flag("--server") == "http://platform:8000" and "syn_agent_secret" not in " ".join(argv)
-    assert env["SYNTRA_AGENT_TOKEN"] == "syn_agent_secret" and env["CUDA_VISIBLE_DEVICES"] == "1"
+    assert env["BLOOMBEE_AGENT_TOKEN"] == "syn_agent_secret" and env["CUDA_VISIBLE_DEVICES"] == "1"
     with pytest.raises(ValueError):
         build_bloombee_command(spec(kind="diloco"), AgentConfig(work_dir=tmp_path))  # no server/token
     with pytest.raises(ValueError):

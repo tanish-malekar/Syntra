@@ -1,4 +1,4 @@
-from syntra_agent.cli import main
+from bloombee_agent.cli import main
 
 if __name__ == "__main__":
     main()

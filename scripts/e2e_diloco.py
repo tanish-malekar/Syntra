@@ -61,7 +61,7 @@ def wait(predicate, timeout, what):
 
 
 def main():
-    work = Path(tempfile.mkdtemp(prefix="syntra-diloco-"))
+    work = Path(tempfile.mkdtemp(prefix="bloombee-diloco-"))
     model_dir = work / "models" / "tiny-diloco"
     subprocess.run([BB_PYTHON, "-c", f"""
 import glob, torch
@@ -77,8 +77,8 @@ m.save_pretrained('{model_dir}'); tok.save_pretrained('{model_dir}')
     port = free_port()
     url = f"http://127.0.0.1:{port}"
     py = str(ROOT / "backend/.venv/bin/python")
-    env = {"SYNTRA_DB": f"sqlite:///{work}/syntra.db", "SYNTRA_BLOOMBEE_PYTHON": BB_PYTHON, "SYNTRA_MODELS_DIR": str(work / "models"),
-           "SYNTRA_DATA_DIR": str(work / "data"), "PYTHONPATH": str(ROOT / "backend")}
+    env = {"BLOOMBEE_DB": f"sqlite:///{work}/syntra.db", "BLOOMBEE_PYTHON": BB_PYTHON, "BLOOMBEE_MODELS_DIR": str(work / "models"),
+           "BLOOMBEE_DATA_DIR": str(work / "data"), "PYTHONPATH": str(ROOT / "backend")}
     subprocess.run([py, "-m", "app.seed"], env={**os.environ, **env}, cwd=str(ROOT / "backend"), capture_output=True, check=True)
     subprocess.run([py, "-c", f"""
 from sqlmodel import Session
@@ -101,7 +101,7 @@ with Session(e) as s:
     alice, provider = new_user("alice"), new_user("provider")
     pid = provider.post("/providers", json={"name": "Mac lab", "type": "individual"}).json()["id"]
     token = provider.post(f"/providers/{pid}/agent-tokens", json={"label": "m4"}).json()["token"]
-    spawn([py, "-m", "syntra_agent", "--server", url, "--token", token, "--simulated", "--sim-count", "3", "--sim-memory-gb", "6",
+    spawn([py, "-m", "bloombee_agent", "--server", url, "--token", token, "--simulated", "--sim-count", "3", "--sim-memory-gb", "6",
            "--python", BB_PYTHON, "--models-dir", str(work / "models"), "--work-dir", str(work / "agent")],
           env={"PYTHONPATH": str(ROOT / "agent")}, out=open(work / "agent.log", "w"))
     wait(lambda: len([g for g in alice.get("/gpus").json() if g["status"] == "idle"]) == 3, 40, "3 idle GPUs")
@@ -151,7 +151,7 @@ finally:
             pass
     time.sleep(2)
     sys.path.insert(0, str(ROOT / "agent"))
-    from syntra_agent.workers import kill_process_group
+    from bloombee_agent.workers import kill_process_group
     for p in procs:
         kill_process_group(p.pid)
     os._exit(1 if results.get("failed") else 0)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from syntra_agent import hardware as hw
+from bloombee_agent import hardware as hw
 
 SYSTEM_PROFILER = json.dumps({"SPHardwareDataType": [{"chip_type": "Apple M4 Pro", "physical_memory": "24 GB",
                                                        "machine_name": "MacBook Pro"}]})
@@ -63,7 +63,7 @@ def test_simulate_splits_one_gpu_into_labelled_virtual_gpus():
 
 
 def test_clamshell_state_parsing():
-    from syntra_agent.hardware import parse_clamshell_closed
+    from bloombee_agent.hardware import parse_clamshell_closed
     assert parse_clamshell_closed('    | "AppleClamshellState" = Yes\n') is True
     assert parse_clamshell_closed('    | "AppleClamshellState" = No\n') is False
     assert parse_clamshell_closed("") is False

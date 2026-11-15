@@ -78,12 +78,12 @@ def build_diloco_command(spec: WorkerSpec, cfg: AgentConfig) -> tuple[list[str],
     if not cfg.server or not cfg.token:
         raise ValueError("DiLoCo replicas need the platform address and token (set by the agent)")
     model = resolve_model(spec.model, cfg)
-    argv = [cfg.python, "-m", "syntra_agent.diloco_worker", "--server", cfg.server, "--job", str(spec.job_id),
+    argv = [cfg.python, "-m", "bloombee_agent.diloco_worker", "--server", cfg.server, "--job", str(spec.job_id),
             "--lease", str(spec.lease_id), "--model", model, "--device", spec.device,
             "--work-dir", str(Path(cfg.work_dir).expanduser() / f"diloco-{spec.worker_id}")]
     env = dict(os.environ)
     env["PYTHONPATH"] = str(Path(__file__).resolve().parent.parent) + os.pathsep + env.get("PYTHONPATH", "")
-    env["SYNTRA_AGENT_TOKEN"] = cfg.token  # environment, not argv: other users cannot read it with ps
+    env["BLOOMBEE_AGENT_TOKEN"] = cfg.token  # environment, not argv: other users cannot read it with ps
     if spec.device == "cuda":
         env["CUDA_VISIBLE_DEVICES"] = str(spec.device_index)
     if cfg.hf_home:

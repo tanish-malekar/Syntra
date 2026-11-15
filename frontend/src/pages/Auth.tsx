@@ -22,7 +22,7 @@ export default function AuthPage() {
   return (
     <div className="auth-page">
       <section className="auth-hero">
-        <div className="brand"><span className="logo">S</span>Syntra</div>
+        <div className="brand"><span className="logo" aria-hidden="true">🐝</span>BloomBee</div>
         <h1>Fine-tune on GPUs<br />people share.</h1>
         <p>Train a model across several machines, keep going when one drops, then deploy and compare it, all on a pool of GPUs from individuals and data centers.</p>
         <ul>

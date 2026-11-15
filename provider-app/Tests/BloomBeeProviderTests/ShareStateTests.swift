@@ -1,5 +1,5 @@
 import XCTest
-@testable import SyntraProvider
+@testable import BloomBeeProvider
 
 final class ShareStateTests: XCTestCase {
     func status(_ state: String = "connected", paused: Bool = false, connected: Bool = true, draining: Bool = false,

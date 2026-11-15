@@ -7,7 +7,7 @@ import socket
 
 import functools
 
-from syntra_agent.relay import Relay
+from bloombee_agent.relay import Relay
 
 
 def sync(fn):

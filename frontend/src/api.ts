@@ -1,4 +1,4 @@
-// Typed client for the Syntra backend (cookie session, JSON).
+// Typed client for the BloomBee backend (cookie session, JSON).
 // Dev server: the backend on :8000. Production build (served by the backend itself): the same origin under /api.
 export const API: string = (import.meta.env.VITE_API as string | undefined)
   ?? (import.meta.env.DEV ? "http://localhost:8000" : `${window.location.origin}/api`);

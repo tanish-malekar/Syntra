@@ -1,4 +1,4 @@
-"""Personal API keys for the `syntra` SDK. The plaintext is shown once; only its hash is stored."""
+"""Personal API keys for the `bloombee_sdk` SDK. The plaintext is shown once; only its hash is stored."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException

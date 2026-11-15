@@ -29,7 +29,7 @@ private func send(_ request: URLRequest) async throws -> Data {
     return data
 }
 
-/// The Syntra platform (backend): pairing, usage, sign-out.
+/// The BloomBee platform (backend): pairing, usage, sign-out.
 struct PlatformClient {
     let server: URL
 
@@ -66,7 +66,7 @@ struct PlatformClient {
     }
 }
 
-/// The agent's local control API (agent/syntra_agent/control.py). Port and secret come from ~/.syntra/agent.json, so the
+/// The agent's local control API (agent/bloombee_agent/control.py). Port and secret come from ~/.bloombee/agent.json, so the
 /// app also attaches to an agent that was started from a terminal.
 struct ControlClient {
     let stateDir: URL
@@ -83,7 +83,7 @@ struct ControlClient {
         guard let info = info() else { throw ClientError.notRunning }
         var r = URLRequest(url: URL(string: "http://127.0.0.1:\(info.port)\(path)")!)
         r.httpMethod = method
-        r.setValue(info.secret, forHTTPHeaderField: "X-Syntra-Secret")
+        r.setValue(info.secret, forHTTPHeaderField: "X-BloomBee-Secret")
         r.timeoutInterval = 5
         if let body {
             r.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -98,11 +98,11 @@ struct ControlClient {
     func quit() async throws -> AgentStatus { try await request("POST", "/quit") }
 }
 
-/// Where the app keeps this machine's agent token: ~/.syntra/app-tokens.json, readable only by this user (mode 0600),
+/// Where the app keeps this machine's agent token: ~/.bloombee/app-tokens.json, readable only by this user (mode 0600),
 /// like the agent's own control secret. (The login Keychain asked for the user's password after every rebuild of an
 /// app that is not distributed through a provisioning profile.) The token is revocable on the website at any time.
 enum Keychain {
-    static var file: URL { FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".syntra/app-tokens.json") }
+    static var file: URL { FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".bloombee/app-tokens.json") }
 
     private static func readAll() -> [String: String] {
         guard let data = try? Data(contentsOf: file),

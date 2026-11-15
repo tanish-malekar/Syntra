@@ -12,7 +12,7 @@ from typing import Awaitable, Callable, Optional
 
 from app.relay import Relay
 
-log = logging.getLogger("syntra.relay_hub")
+log = logging.getLogger("bloombee_platform.relay_hub")
 
 Send = Callable[[int, bytes], Awaitable[None]]
 Notify = Callable[[int, dict], Awaitable[None]]

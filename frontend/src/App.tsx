@@ -20,7 +20,7 @@ function Shell() {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="brand"><span className="logo">S</span><span>Syntra</span></div>
+        <div className="brand"><span className="logo" aria-hidden="true">🐝</span><span>BloomBee</span></div>
         <nav className="nav" aria-label="Main">
           <div className="group">Use GPUs</div>
           <NavLink to="/train" className={link}>{Icon.train}Train a model</NavLink>

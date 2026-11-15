@@ -8,15 +8,15 @@ struct InstallLayout {
     var bloombeeDir: URL { home.appendingPathComponent("BloomBee") }
     var isInstalled: Bool {
         FileManager.default.isExecutableFile(atPath: python.path)
-            && FileManager.default.fileExists(atPath: agentDir.appendingPathComponent("syntra_agent/cli.py").path)
+            && FileManager.default.fileExists(atPath: agentDir.appendingPathComponent("bloombee_agent/cli.py").path)
             // an agent installed before the desktop app existed has no control API: treat it as outdated and refresh it
-            && FileManager.default.fileExists(atPath: agentDir.appendingPathComponent("syntra_agent/control.py").path)
+            && FileManager.default.fileExists(atPath: agentDir.appendingPathComponent("bloombee_agent/control.py").path)
             && FileManager.default.fileExists(atPath: bloombeeDir.appendingPathComponent("src/bloombee").path)
     }
     var logFile: URL { home.appendingPathComponent("app-agent.log") }
 
     static var standard: InstallLayout {
-        InstallLayout(home: FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".syntra"))
+        InstallLayout(home: FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".bloombee"))
     }
 }
 
@@ -43,7 +43,7 @@ final class Installer {
         process.arguments = ["-c", "set -o pipefail; curl -fsSL '\(script)' | bash -s -- --install-only"]
         var env = ProcessInfo.processInfo.environment
         env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:" + (env["PATH"] ?? "")
-        env["SYNTRA_HOME"] = layout.home.path
+        env["BLOOMBEE_HOME"] = layout.home.path
         process.environment = env
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -90,7 +90,7 @@ final class AgentProcess {
         guard process?.isRunning != true else { return }
         let p = Process()
         p.executableURL = layout.python
-        var args = ["-m", "syntra_agent", "--server", server.absoluteString, "--control", "--state-dir", layout.home.path,
+        var args = ["-m", "bloombee_agent", "--server", server.absoluteString, "--control", "--state-dir", layout.home.path,
                     "--bloombee-dir", layout.bloombeeDir.path, "--python", layout.python.path,
                     "--models-dir", layout.home.appendingPathComponent("models").path,
                     "--work-dir", layout.home.appendingPathComponent("work").path]
@@ -99,7 +99,7 @@ final class AgentProcess {
         p.currentDirectoryURL = layout.agentDir
         var env = ProcessInfo.processInfo.environment
         env["PYTHONPATH"] = layout.agentDir.path
-        env["SYNTRA_AGENT_TOKEN"] = token  // not on the command line: other users cannot read it with ps
+        env["BLOOMBEE_AGENT_TOKEN"] = token  // not on the command line: other users cannot read it with ps
         p.environment = env
         FileManager.default.createFile(atPath: layout.logFile.path, contents: nil)
         let log = try FileHandle(forWritingTo: layout.logFile)

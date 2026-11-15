@@ -76,7 +76,7 @@ def cleanup():
             pass
     # context3: only processes that belong to this run (agent + workers carry the run tag in their command lines)
     try:
-        ssh.run_remote(f"pkill -u tmalekar -f 'syntra_agent.*{TAG}' || true; pkill -u tmalekar -f 'dht_prefix job.*initial_peers /ip4/127.0.0.1/tcp/{DHT_PORT}' || true; sleep 2; "
+        ssh.run_remote(f"pkill -u tmalekar -f 'bloombee_agent.*{TAG}' || true; pkill -u tmalekar -f 'dht_prefix job.*initial_peers /ip4/127.0.0.1/tcp/{DHT_PORT}' || true; sleep 2; "
                        f"pgrep -u tmalekar -f '{TAG}|initial_peers /ip4/127.0.0.1/tcp/{DHT_PORT}' | wc -l", timeout=60)
     except Exception:
         pass
@@ -86,7 +86,7 @@ TAG = f"e2e{int(time.time())}"
 
 
 def main():
-    work = Path(tempfile.mkdtemp(prefix="syntra-c3-", dir=SCRATCH))
+    work = Path(tempfile.mkdtemp(prefix="bloombee-c3-", dir=SCRATCH))
     py = str(ROOT / "backend/.venv/bin/python")
 
     # --- only idle GPUs on context3 ---------------------------------------------------------------------------------
@@ -99,15 +99,15 @@ def main():
     offer = ",".join(str(i) for i in idle[:2])
 
     # --- ship the agent to context3 and make a small venv for it ------------------------------------------------------
-    ssh.push_dir(str(ROOT / "agent"), "syntra_agent", f"{C3}/agent")
+    ssh.push_dir(str(ROOT / "agent"), "bloombee_agent", f"{C3}/agent")
     r = ssh.run_remote(f"[ -x {C3}/agent-venv/bin/python ] || /data01/tmalekar/conda-envs/bb/bin/python -m venv {C3}/agent-venv; "
                        f"export PIP_CACHE_DIR={C3}/tmp TMPDIR={C3}/tmp; {C3}/agent-venv/bin/pip install -q httpx 'websockets>=13' 2>&1 | tail -2; "
                        f"{C3}/agent-venv/bin/python -c 'import httpx, websockets; print(\"agent deps ok\")'", timeout=300)
     log("context3 agent env", out=r.stdout.strip()[-80:])
 
     # --- backend on this Mac with a fixed DHT port, tunnel, agents -------------------------------------------------------
-    env = {"SYNTRA_DB": f"sqlite:///{work}/syntra.db", "SYNTRA_BLOOMBEE_PYTHON": BB_PYTHON, "SYNTRA_BLOOMBEE_DIR": BB_DIR,
-           "SYNTRA_MODELS_DIR": str(SCRATCH / "models"), "SYNTRA_DATA_DIR": str(work / "data"), "SYNTRA_DHT_PORT": str(DHT_PORT),
+    env = {"BLOOMBEE_DB": f"sqlite:///{work}/syntra.db", "BLOOMBEE_PYTHON": BB_PYTHON, "BLOOMBEE_DIR": BB_DIR,
+           "BLOOMBEE_MODELS_DIR": str(SCRATCH / "models"), "BLOOMBEE_DATA_DIR": str(work / "data"), "BLOOMBEE_DHT_PORT": str(DHT_PORT),
            "PYTHONPATH": str(ROOT / "backend")}
     subprocess.run([py, "-m", "app.seed"], env={**os.environ, **env}, cwd=str(ROOT / "backend"), capture_output=True, check=True)
     spawn([py, "-m", "uvicorn", "app.main:app", "--port", str(BACKEND_PORT), "--log-level", "warning"], env=env, out=open(work / "backend.log", "w"), cwd=str(ROOT / "backend"))
@@ -129,12 +129,12 @@ def main():
         return owner.post(f"/providers/{pid}/agent-tokens", json={"label": name}).json()["token"]
 
     mac_token, lab_token = agent_token(mac_owner, "Maya's MacBook", "individual"), agent_token(lab_owner, "Stony Brook lab (context3)", "enterprise")
-    spawn([py, "-m", "syntra_agent", "--server", url, "--token", mac_token, "--bloombee-dir", BB_DIR, "--python", BB_PYTHON,
+    spawn([py, "-m", "bloombee_agent", "--server", url, "--token", mac_token, "--bloombee-dir", BB_DIR, "--python", BB_PYTHON,
            "--models-dir", str(SCRATCH / "models"), "--work-dir", str(work / "agent-mac"), "--port-range", "31010-31019", "--region", "home"],
           env={"PYTHONPATH": str(ROOT / "agent")}, out=open(work / "agent-mac.log", "w"))
     # the context3 agent: idle GPUs only (allowlist), its own env, models on /data01, workers on the forwarded ports
     remote = (f"cd {C3}/agent && export HF_HOME={C3}/hf TMPDIR={C3}/tmp PYTHONPATH={C3}/agent; "
-              f"nohup {C3}/agent-venv/bin/python -m syntra_agent --server http://127.0.0.1:{BACKEND_PORT} --token {lab_token} "
+              f"nohup {C3}/agent-venv/bin/python -m bloombee_agent --server http://127.0.0.1:{BACKEND_PORT} --token {lab_token} "
               f"--bloombee-dir {C3}/BloomBee --python /data01/tmalekar/conda-envs/bb/bin/python --models-dir {C3}/models "
               f"--work-dir {C3}/agent-work-{TAG} {'--relay' if RELAY else '--port-range 31030-31039'} --gpus {offer} --region lab-{TAG} > {C3}/out/agent_{TAG}.log 2>&1 < /dev/null & echo started")
     log("context3 agent", out=ssh.run_remote(remote).stdout.strip())

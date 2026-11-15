@@ -58,7 +58,7 @@ def cleanup():
             pass
     time.sleep(2)
     sys.path.insert(0, str(ROOT / "agent"))
-    from syntra_agent.workers import kill_process_group  # spares resource_tracker so semaphores are unlinked (macOS)
+    from bloombee_agent.workers import kill_process_group  # spares resource_tracker so semaphores are unlinked (macOS)
     for p in procs:
         kill_process_group(p.pid)
 
@@ -74,12 +74,12 @@ def wait(predicate, timeout, what):
 
 
 def main():
-    work = Path(tempfile.mkdtemp(prefix="syntra-e2e-", dir=SCRATCH))
+    work = Path(tempfile.mkdtemp(prefix="bloombee-e2e-", dir=SCRATCH))
     port = free_port()
     url = f"http://127.0.0.1:{port}"
     backend_py = str(ROOT / "backend/.venv/bin/python")
-    env = {"SYNTRA_DB": f"sqlite:///{work}/syntra.db", "SYNTRA_BLOOMBEE_PYTHON": BB_PYTHON, "SYNTRA_BLOOMBEE_DIR": BB_DIR,
-           "SYNTRA_MODELS_DIR": str(SCRATCH / "models"), "SYNTRA_DATA_DIR": str(work / "data"), "PYTHONPATH": str(ROOT / "backend")}
+    env = {"BLOOMBEE_DB": f"sqlite:///{work}/syntra.db", "BLOOMBEE_PYTHON": BB_PYTHON, "BLOOMBEE_DIR": BB_DIR,
+           "BLOOMBEE_MODELS_DIR": str(SCRATCH / "models"), "BLOOMBEE_DATA_DIR": str(work / "data"), "PYTHONPATH": str(ROOT / "backend")}
     # data dirs live in the temp folder so repeated runs never collide
     (work / "backend.log").write_text("")
     spawn([backend_py, "-m", "uvicorn", "app.main:app", "--port", str(port), "--log-level", "warning"], env=env,
@@ -102,7 +102,7 @@ def main():
     alice, provider = new_user("alice"), new_user("provider")
     pid = provider.post("/providers", json={"name": "Mac lab", "type": "individual"}).json()["id"]
     token = provider.post(f"/providers/{pid}/agent-tokens", json={"label": "m4"}).json()["token"]
-    spawn([backend_py, "-m", "syntra_agent", "--server", url, "--token", token, "--simulated", "--sim-count", "3", "--sim-memory-gb", "6",
+    spawn([backend_py, "-m", "bloombee_agent", "--server", url, "--token", token, "--simulated", "--sim-count", "3", "--sim-memory-gb", "6",
            "--bloombee-dir", BB_DIR, "--python", BB_PYTHON, "--models-dir", str(SCRATCH / "models"), "--work-dir", str(work / "agent"),
            "--region", "home"], env={"PYTHONPATH": str(ROOT / "agent")}, out=open(work / "agent.log", "w"))
     wait(lambda: len([g for g in alice.get("/gpus").json() if g["status"] == "idle"]) == 3, 40, "3 idle GPUs")

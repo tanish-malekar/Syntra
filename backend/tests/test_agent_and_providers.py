@@ -152,5 +152,5 @@ def test_join_script_and_agent_archive_are_served_for_one_command_onboarding(cli
     archive = client.get("/install/agent.tgz")
     assert archive.status_code == 200
     names = tarfile.open(fileobj=io.BytesIO(archive.content), mode="r:gz").getnames()
-    assert "syntra_agent/relay.py" in names and "syntra_agent/client.py" in names
+    assert "bloombee_agent/relay.py" in names and "bloombee_agent/client.py" in names
     assert "torch" in client.get("/install/requirements.txt").text

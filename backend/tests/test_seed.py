@@ -18,7 +18,7 @@ def test_dev_accounts_get_generated_passwords_in_a_private_file(app, db, tmp_pat
     text = env.read_text()
     for email, password in created.items():
         assert f"{email}={password}" in text
-    assert db.exec(select(User).where(User.email == "admin@syntra.test")).one().is_admin is True
+    assert db.exec(select(User).where(User.email == "admin@bloombee.test")).one().is_admin is True
 
     email, password = next(iter(created.items()))
     c = TestClient(app)

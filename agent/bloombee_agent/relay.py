@@ -15,7 +15,7 @@ import logging
 import struct
 from typing import Awaitable, Callable, Iterable, Optional
 
-log = logging.getLogger("syntra.relay")
+log = logging.getLogger("bloombee_platform.relay")
 
 OPEN, DATA, CLOSE = 1, 2, 3
 HEADER = struct.Struct(">BI")

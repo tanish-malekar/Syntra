@@ -7,7 +7,7 @@ Status: `[ ]` open, `[x]` done, `[~]` partly done.
 |---|---|---|
 | 1 | Finish QLoRA (4-bit base) | - |
 | 2 | Provider app: one-click sharing, status, GPU time used, earnings | - |
-| 3 | RL: managed DPO jobs + `syntra` Python SDK (Tinker-style primitives, GRPO/PPO loops) | 1 (LoRA/QLoRA trainer) |
+| 3 | RL: managed DPO jobs + `bloombee_sdk` Python SDK (Tinker-style primitives, GRPO/PPO loops) | 1 (LoRA/QLoRA trainer) |
 | 4 | Full fine-tuning, DiLoCo-style data parallelism | 2 (agent worker kinds) |
 
 ---
@@ -15,7 +15,7 @@ Status: `[ ]` open, `[x]` done, `[~]` partly done.
 ## Stage 1: finish QLoRA
 
 Already done (see `LATER.md` changelog):
-- BloomBee `--compress_weight` flag (FlexGen 4-bit group quantization) on branch `qlora-4bit` in `~/.syntra/BloomBee`.
+- BloomBee `--compress_weight` flag (FlexGen 4-bit group quantization) on branch `qlora-4bit` in `~/.bloombee/BloomBee`.
 - Memory-light backward: decompressed weights are not kept for backward.
 - `weight_bits` (16 | 4) on training jobs and deployments, end to end. The scheduler only picks 4-bit-capable agents.
 - Planner memory model, UI toggles, tests.
@@ -45,12 +45,12 @@ Goal: no terminal. The provider signs in once and clicks **Share my GPU**. The a
 Linux machines keep the one-line command, and their agent gets the same local status endpoint.
 
 ### Pieces
-1. **Agent control API** (Python, `agent/syntra_agent/control.py`), served on `127.0.0.1` on a free port. The port and a random secret go into `~/.syntra/agent.json` with mode 0600.
+1. **Agent control API** (Python, `agent/bloombee_agent/control.py`), served on `127.0.0.1` on a free port. The port and a random secret go into `~/.bloombee/agent.json` with mode 0600.
    - `GET /status`: connection state, the GPUs and their status, workers running, last heartbeat, last error.
    - `POST /pause`: stops accepting work. Running workers finish or are drained, and the GPUs are reported `offline`.
    - `POST /resume`.
    - `POST /quit`.
-2. **Agent service mode** (`python -m syntra_agent service`): reads its settings (server, token, models directory) from `~/.syntra/config.json`. It reconnects with backoff. It never exits on transient errors; it exits only when the token is revoked, and reports that state first.
+2. **Agent service mode** (`python -m bloombee_agent service`): reads its settings (server, token, models directory) from `~/.bloombee/config.json`. It reconnects with backoff. It never exits on transient errors; it exits only when the token is revoked, and reports that state first.
 3. **Backend: provider usage API.** `GET /providers/me/usage` returns, per GPU and in total:
    - GPU seconds leased, now and in total;
    - earnings: settled, plus a running estimate for open leases;
@@ -61,9 +61,9 @@ Linux machines keep the one-line command, and their agent gets the same local st
 4. **Backend: app pairing.** `POST /providers/app-pair`, signed in with email and password, returns a device token.
    - Creates (or reuses) the user's provider profile, plus an agent token labelled with the machine name.
    - Calling it again from the same machine (hardware UUID) reuses the token rather than creating more.
-5. **Mac app** (`provider-app/`, Swift Package, `SyntraProvider.app`):
+5. **Mac app** (`provider-app/`, Swift Package, `BloomBeeProvider.app`):
    - **First run**: server URL and sign-in. The app pairs the device and stores the token in the macOS Keychain.
-   - **Setup check**: Python 3.12 and git present? The app runs the same install steps as `join.sh` (venv in `~/.syntra`, BloomBee, agent) with progress shown, and sends errors to a log viewer.
+   - **Setup check**: Python 3.12 and git present? The app runs the same install steps as `join.sh` (venv in `~/.bloombee`, BloomBee, agent) with progress shown, and sends errors to a log viewer.
    - **Share / Pause button**: Share starts the agent as a child process. The app restarts it if it crashes, but stops after 5 crashes in 2 minutes and shows the error. Pause calls `/pause`.
    - **Menu bar icon**: green = shared and idle, blue = in use, grey = paused, red = disconnected or error.
    - **Panel**: the status text, plus per-GPU usage and earnings from `/providers/me/usage`, refreshed every 10 s and on wake.
@@ -76,7 +76,7 @@ Linux machines keep the one-line command, and their agent gets the same local st
 | Lid closed / sleep | The agent already reports offline on lid close. On wake the app restarts the heartbeat at once, and the status shows "Reconnecting". |
 | Network lost | The agent keeps retrying with backoff, and the app shows Disconnected with the time it was last seen. Leases on this GPU are replaced by the platform after the heartbeat timeout (existing behaviour). |
 | Token revoked on the website | The agent receives a 401, stops, and reports `revoked`. The app asks the user to sign in again. |
-| Two copies of the app, or an agent from the terminal already running | A lock file (`~/.syntra/agent.lock`, PID check) blocks the second one. The app attaches to the running agent's control API instead of starting another. |
+| Two copies of the app, or an agent from the terminal already running | A lock file (`~/.bloombee/agent.lock`, PID check) blocks the second one. The app attaches to the running agent's control API instead of starting another. |
 | GPU busy with the owner's own work | Already reported as `busy_external` by the agent. The app shows "Busy with your apps (not shared)". |
 | Pause while a job is using the GPU | Ask: "Finish the current job first" (drain) or "Stop now" (kill; the platform moves the work to another GPU). |
 | Battery | Pause automatically on battery if the setting is on (off by default). |
@@ -88,7 +88,7 @@ Linux machines keep the one-line command, and their agent gets the same local st
 
 Done: `backend/app/runner/rl_losses.py` + `rl_engine.py` (DPO, PPO-clip with k3 KL, importance sampling, cross-entropy,
 GRPO advantages, sampling with temperature/top-p/top-k/seed and behaviour log-probs), runner modes `session` and DPO jobs,
-`/sessions` API with idempotency keys and idle auto-save, API keys, preference datasets, `sdk/` (`syntra` package with
+`/sessions` API with idempotency keys and idle auto-save, API keys, preference datasets, `sdk/` (`bloombee_sdk` package with
 `grpo`, `ppo`, `dpo` loops), Train page (method, beta, start from a model) and a Developers page.
 Still to do: a real GRPO and DPO run on TinyLlama on this Mac (after the reboot).
 
@@ -110,10 +110,10 @@ Two layers, modelled on Together AI (managed DPO jobs) and Tinker / OpenPipe ART
 - Events: `train.step` with `loss`, `reward_margin` and `reward_accuracy`.
 - Fail-over is unchanged: workers are stateless.
 
-### 3c. `syntra` Python SDK (`sdk/`, pip-installable)
+### 3c. `bloombee_sdk` Python SDK (`sdk/`, pip-installable)
 ```python
-import syntra
-client = syntra.Client(api_key=...)          # personal API key from the website
+import bloombee_sdk
+client = bloombee_sdk.Client(api_key=...)          # personal API key from the website
 tc = client.training_session(base_model="TinyLlama-1.1B-Chat", rank=16, weight_bits=4, gpus=2)
 out = tc.sample(prompts, n=8, temperature=1.0)            # returns tokens + logprobs
 tc.forward_backward(batch, loss="ppo", clip=0.2)          # or "importance_sampling", "dpo", "cross_entropy"
@@ -121,9 +121,9 @@ tc.optim_step(lr=1e-5)
 tc.save("my-grpo-model")                                  # lands in My models, deployable like any other
 ```
 Ready-made loops:
-- `syntra.rl.grpo(tc, prompts, reward_fn, group_size=8, ...)`: group-relative advantages, PPO-clip loss, optional KL to the reference.
-- `syntra.rl.ppo(...)`: same loss, advantages from the user, or reward minus a moving baseline.
-- `syntra.rl.dpo(tc, pairs, beta)`.
+- `bloombee_sdk.rl.grpo(tc, prompts, reward_fn, group_size=8, ...)`: group-relative advantages, PPO-clip loss, optional KL to the reference.
+- `bloombee_sdk.rl.ppo(...)`: same loss, advantages from the user, or reward minus a moving baseline.
+- `bloombee_sdk.rl.dpo(tc, pairs, beta)`.
 
 The reward function runs on the user's machine. Only token ids and floats cross the network.
 
@@ -149,7 +149,7 @@ Every replica holds the whole model, with trainable weights and an AdamW inner o
 
 - **New job kind `full_ft`, `method: "diloco"`**: `replicas`, `inner_steps` (H), `outer_lr`, `outer_momentum`, `inner_lr`.
 - **Planner**: a replica needs about 16 bytes per parameter plus activations (Qwen2.5-0.5B ≈ 8-9 GB). It picks N GPUs that each fit the full model. There is no layer split.
-- **Agent worker kind `diloco_replica`**: a small trainer script (`agent/syntra_agent/diloco_worker.py`, torch + transformers only, no BloomBee). Per round it:
+- **Agent worker kind `diloco_replica`**: a small trainer script (`agent/bloombee_agent/diloco_worker.py`, torch + transformers only, no BloomBee). Per round it:
   1. downloads the global weights,
   2. trains H steps on its shard,
   3. uploads Δθ in bf16 (half the bytes),

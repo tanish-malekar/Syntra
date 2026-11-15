@@ -1,9 +1,9 @@
-# Syntra Provider (macOS menu bar app)
+# BloomBee Provider (macOS menu bar app)
 
-Shares this Mac's GPU with the Syntra pool. The user never needs a terminal.
+Shares this Mac's GPU with the BloomBee pool. The user never needs a terminal.
 
 ```bash
-./build.sh          # -> dist/SyntraProvider.app (ad-hoc signed, menu bar only)
+./build.sh          # -> dist/BloomBeeProvider.app (ad-hoc signed, menu bar only)
 ./build.sh --open   # build and start
 swift test          # unit tests
 ```
@@ -12,10 +12,10 @@ swift test          # unit tests
 
 | Piece | What it does |
 |---|---|
-| Sign in | `POST /app/pair` with email + password + this Mac's hardware UUID. Returns an agent token for this machine, stored in `~/.syntra/app-tokens.json` (mode 0600, like the agent's control secret). Pairing the same Mac again revokes its old token. |
-| Install | First **Share** runs `join.sh --install-only`: Python 3.12 venv, BloomBee and the agent, all in `~/.syntra`. The log goes to `~/.syntra/install.log`. |
-| Share | Starts `python -m syntra_agent --control --relay ...` with the token in the environment (not on the command line). Restarts it after a crash, and gives up after 5 crashes in 2 minutes. |
-| Status | The agent's local control API (`127.0.0.1`, port and secret in `~/.syntra/agent.json`, mode 0600). |
+| Sign in | `POST /app/pair` with email + password + this Mac's hardware UUID. Returns an agent token for this machine, stored in `~/.bloombee/app-tokens.json` (mode 0600, like the agent's control secret). Pairing the same Mac again revokes its old token. |
+| Install | First **Share** runs `join.sh --install-only`: Python 3.12 venv, BloomBee and the agent, all in `~/.bloombee`. The log goes to `~/.bloombee/install.log`. |
+| Share | Starts `python -m bloombee_agent --control --relay ...` with the token in the environment (not on the command line). Restarts it after a crash, and gives up after 5 crashes in 2 minutes. |
+| Status | The agent's local control API (`127.0.0.1`, port and secret in `~/.bloombee/agent.json`, mode 0600). |
 | Pause / resume / quit | `POST /pause {"mode": "drain" or "now"}`, `/resume`, `/quit` on the control API. |
 | Usage and earnings | `GET /agent/usage` with the token: GPU time and earnings per GPU, settled (from the ledger) plus a live estimate for the running job. |
 | Sign out | `POST /agent/unpair`: the token stops working, and the agent notices and exits (code 3). |

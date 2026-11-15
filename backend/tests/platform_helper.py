@@ -19,9 +19,9 @@ FAKE_MERGE = Path(__file__).resolve().parent / "fake_merge.py"
 from app.config import Settings  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.seed import seed_reference_data  # noqa: E402
-from syntra_agent.client import Agent, AgentSettings  # noqa: E402
-from syntra_agent.hardware import GpuInfo  # noqa: E402
-from syntra_agent.workers import AgentConfig, WorkerManager  # noqa: E402
+from bloombee_agent.client import Agent, AgentSettings  # noqa: E402
+from bloombee_agent.hardware import GpuInfo  # noqa: E402
+from bloombee_agent.workers import AgentConfig, WorkerManager  # noqa: E402
 
 PASSWORD = "correct horse battery"
 

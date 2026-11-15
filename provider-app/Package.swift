@@ -1,12 +1,12 @@
 // swift-tools-version:5.9
-// Syntra Provider: a macOS menu bar app that shares this Mac's GPU with the Syntra pool with one click.
+// BloomBee Provider: a macOS menu bar app that shares this Mac's GPU with the BloomBee pool with one click.
 import PackageDescription
 
 let package = Package(
-    name: "SyntraProvider",
+    name: "BloomBeeProvider",
     platforms: [.macOS(.v13)],
     targets: [
-        .executableTarget(name: "SyntraProvider", path: "Sources/SyntraProvider"),
-        .testTarget(name: "SyntraProviderTests", dependencies: ["SyntraProvider"], path: "Tests/SyntraProviderTests"),
+        .executableTarget(name: "BloomBeeProvider", path: "Sources/BloomBeeProvider"),
+        .testTarget(name: "BloomBeeProviderTests", dependencies: ["BloomBeeProvider"], path: "Tests/BloomBeeProviderTests"),
     ]
 )

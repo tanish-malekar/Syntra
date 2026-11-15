@@ -144,7 +144,7 @@ final class AppModel: ObservableObject {
             share = .signedOut
             flash = "This Mac was signed out (token revoked on the website). Sign in again to share."
         case .alreadyRunning:
-            flash = "Another Syntra agent is running on this Mac; showing its status."
+            flash = "Another BloomBee agent is running on this Mac; showing its status."
         case .crashedTooOften(let message):
             share = .error(message); setWantShared(false)
         case .stopped:

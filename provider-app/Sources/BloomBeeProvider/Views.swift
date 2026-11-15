@@ -24,7 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if window == nil {
             let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 420),
                              styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
-            w.title = "Syntra Provider"
+            w.title = "BloomBee Provider"
             w.isReleasedWhenClosed = false
             w.contentView = NSHostingView(rootView: PanelView(large: true).environmentObject(model))
             w.collectionBehavior.insert(.moveToActiveSpace)
@@ -43,7 +43,7 @@ struct MenuBarLabel: View {
 }
 
 @main
-struct SyntraProviderApp: App {
+struct BloomBeeProviderApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {
@@ -65,13 +65,13 @@ struct PanelView: View {
         VStack(alignment: .leading, spacing: 12) {
             if large {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Share your GPU with Syntra").font(.title2).bold()
+                    Text("Share your GPU with BloomBee").font(.title2).bold()
                     Text("Connect once and this Mac's GPU joins the pool when it is idle. You earn for every minute a job uses it.")
                         .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
             HStack {
-                Text("Syntra").font(.headline)
+                Text("BloomBee").font(.headline)
                 Spacer()
                 Text(model.share.title).font(.subheadline).foregroundStyle(color)
             }
@@ -117,7 +117,7 @@ struct SignInView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Sign in with your Syntra account, then press Connect.").font(.callout)
+            Text("Sign in with your BloomBee account, then press Connect.").font(.callout)
             TextField("Server", text: $model.serverText).textFieldStyle(.roundedBorder)
             TextField("Email", text: $model.email).textFieldStyle(.roundedBorder).textContentType(.username)
             SecureField("Password", text: $password).textFieldStyle(.roundedBorder)

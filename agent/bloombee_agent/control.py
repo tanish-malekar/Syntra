@@ -19,7 +19,7 @@ import secrets
 from pathlib import Path
 from typing import Awaitable, Callable
 
-log = logging.getLogger("syntra_agent.control")
+log = logging.getLogger("bloombee_platform_agent.control")
 
 Handler = Callable[[dict], Awaitable[dict]]
 MAX_BODY = 64 * 1024
@@ -58,7 +58,7 @@ class InstanceLock:
                 except (OSError, ValueError):
                     other = 0
                 if other != os.getpid() and pid_alive(other):
-                    raise AlreadyRunning(f"another Syntra agent is already running (pid {other})")
+                    raise AlreadyRunning(f"another BloomBee agent is already running (pid {other})")
                 self.path.unlink(missing_ok=True)  # stale: take it over
                 continue
             with os.fdopen(fd, "w") as f:
@@ -116,7 +116,7 @@ class ControlServer:
             length = int(headers.get("content-length", "0") or 0)
             if length > MAX_BODY:
                 status, body = 413, {"error": "body too large"}
-            elif not hmac.compare_digest(headers.get("x-syntra-secret", ""), self.secret):
+            elif not hmac.compare_digest(headers.get("x-bloombee-secret", ""), self.secret):
                 status, body = 401, {"error": "bad secret"}
             else:
                 raw = await asyncio.wait_for(reader.readexactly(length), 5) if length else b""

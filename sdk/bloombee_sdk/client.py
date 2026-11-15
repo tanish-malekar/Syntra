@@ -1,4 +1,4 @@
-"""HTTP client for Syntra training sessions. Only token ids and numbers cross the network; your reward code stays local."""
+"""HTTP client for BloomBee training sessions. Only token ids and numbers cross the network; your reward code stays local."""
 from __future__ import annotations
 
 import os
@@ -12,23 +12,23 @@ import httpx
 RETRY_STATUSES = (502, 503, 504)
 
 
-class SyntraError(RuntimeError):
-    """Base class for errors from the Syntra API."""
+class BloomBeeError(RuntimeError):
+    """Base class for errors from the BloomBee API."""
 
     def __init__(self, message: str, status: int | None = None):
         super().__init__(message)
         self.status = status
 
 
-class BadRequest(SyntraError):
+class BadRequest(BloomBeeError):
     """The request was invalid (shapes, lengths, values). Nothing was changed on the server."""
 
 
-class NotSignedIn(SyntraError):
+class NotSignedIn(BloomBeeError):
     """Missing, wrong or revoked API key."""
 
 
-class SessionNotRunning(SyntraError):
+class SessionNotRunning(BloomBeeError):
     """The session is still starting, or it was closed (by you, or automatically after being idle)."""
 
 
@@ -49,22 +49,22 @@ class Sample:
         return {"tokens": self.tokens, "prompt_len": self.prompt_len}
 
 
-def _error(r: httpx.Response) -> SyntraError:
+def _error(r: httpx.Response) -> BloomBeeError:
     try:
         detail = r.json().get("detail", r.text)
     except ValueError:
         detail = r.text
     detail = detail if isinstance(detail, str) else str(detail)
-    cls = {401: NotSignedIn, 409: SessionNotRunning, 422: BadRequest, 404: BadRequest}.get(r.status_code, SyntraError)
+    cls = {401: NotSignedIn, 409: SessionNotRunning, 422: BadRequest, 404: BadRequest}.get(r.status_code, BloomBeeError)
     return cls(f"HTTP {r.status_code}: {detail}", r.status_code)
 
 
 class Client:
     def __init__(self, api_key: str | None = None, base_url: str | None = None, timeout: float = 900.0, retries: int = 3):
-        self.api_key = api_key or os.environ.get("SYNTRA_API_KEY", "")
-        self.base_url = (base_url or os.environ.get("SYNTRA_BASE_URL", "http://localhost:8000")).rstrip("/")
+        self.api_key = api_key or os.environ.get("BLOOMBEE_API_KEY", "")
+        self.base_url = (base_url or os.environ.get("BLOOMBEE_BASE_URL", "http://localhost:8000")).rstrip("/")
         if not self.api_key:
-            raise NotSignedIn("No API key: pass api_key= or set SYNTRA_API_KEY (create one on the website)")
+            raise NotSignedIn("No API key: pass api_key= or set BLOOMBEE_API_KEY (create one on the website)")
         self.retries = retries
         self._http = httpx.Client(base_url=self.base_url, headers={"Authorization": f"Bearer {self.api_key}"}, timeout=timeout)
 
@@ -87,7 +87,7 @@ class Client:
                 r = self._http.request(method, path, json=json)
             except httpx.TransportError as exc:
                 if attempt == self.retries or (method != "GET" and idempotency_key is None):
-                    raise SyntraError(f"network error: {exc}") from exc
+                    raise BloomBeeError(f"network error: {exc}") from exc
             else:
                 if r.status_code < 400:
                     return r.json() if r.content else None
@@ -95,7 +95,7 @@ class Client:
                     raise _error(r)
             time.sleep(delay)
             delay = min(delay * 2, 10)
-        raise SyntraError("unreachable")
+        raise BloomBeeError("unreachable")
 
     # ---- account ---------------------------------------------------------------------------------
     def base_models(self) -> list[dict]:
@@ -129,7 +129,7 @@ class Client:
             except BaseException:  # timed out / interrupted: do not leave a queued session holding a place (or GPUs)
                 try:
                     session.close()
-                except SyntraError:
+                except BloomBeeError:
                     pass
                 raise
         return session
@@ -151,7 +151,7 @@ class TrainingSession:
     def __exit__(self, *exc):
         try:
             self.close()
-        except SyntraError:
+        except BloomBeeError:
             pass
 
     def info(self) -> dict:
@@ -167,7 +167,7 @@ class TrainingSession:
             if info["status"] in ("stopped", "failed"):
                 raise SessionNotRunning(f"session {self.id} is {info['status']}: {info['job']['result'].get('error') or ''}")
             if time.monotonic() > end:
-                raise SyntraError(f"session {self.id} not ready after {timeout:.0f} s (status {info['status']})")
+                raise BloomBeeError(f"session {self.id} not ready after {timeout:.0f} s (status {info['status']})")
             time.sleep(poll)
 
     def call(self, op: str, **args) -> dict:

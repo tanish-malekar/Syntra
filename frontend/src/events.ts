@@ -57,7 +57,7 @@ export interface EventPayloads {
   "session.closed": { reason: string };
 }
 
-export interface SyntraEvent<T extends EventType = EventType> {
+export interface BloomBeeEvent<T extends EventType = EventType> {
   id: number | null; // null for broadcast-only events (gpu.heartbeat)
   type: T;
   ts: string; // ISO 8601, UTC
@@ -67,6 +67,6 @@ export interface SyntraEvent<T extends EventType = EventType> {
 }
 
 /** First message on /ws/events, then events as they happen; "pong" answers a "ping" text frame. */
-export type SocketMessage = { type: "hello"; role: "user" | "agent" } | { type: "pong" } | SyntraEvent;
+export type SocketMessage = { type: "hello"; role: "user" | "agent" } | { type: "pong" } | BloomBeeEvent;
 
 export const POOL_LEVEL_PREFIX = "gpu."; // gpu.* events go to every signed-in user; others only to the owner

@@ -25,7 +25,7 @@ async def serve() -> None:
     from app.seed import seed_reference_data
     from sqlmodel import Session
 
-    work = Path(tempfile.mkdtemp(prefix="syntra-demo-"))
+    work = Path(tempfile.mkdtemp(prefix="bloombee-demo-"))
     settings = Settings(
         database_url=f"sqlite:///{work}/demo.db", sweep_interval_seconds=1.0, heartbeat_timeout_seconds=4.0, orchestrator_interval=0.3,
         runner_argv=(sys.executable, str(FAKE_RUNNER)), merge_argv=(sys.executable, str(FAKE_MERGE)),
@@ -42,9 +42,9 @@ async def serve() -> None:
         await asyncio.sleep(0.05)
 
     import httpx
-    from syntra_agent.client import Agent, AgentSettings
-    from syntra_agent.hardware import GpuInfo
-    from syntra_agent.workers import AgentConfig, WorkerManager
+    from bloombee_agent.client import Agent, AgentSettings
+    from bloombee_agent.hardware import GpuInfo
+    from bloombee_agent.workers import AgentConfig, WorkerManager
 
     url = f"http://127.0.0.1:{port}"
     logins = {}
@@ -82,7 +82,15 @@ async def serve() -> None:
         s.add(prov)
         s.commit()
     out = ROOT / "demo-logins.txt"
-    out.write_text("\n".join(f"{k} {v}" for k, v in logins.items()) + "\n")
+    # merge, never overwrite: the file also lists accounts made by other scripts (e2e_live, older e2e runs)
+    merged = {}
+    if out.exists():
+        for line in out.read_text().splitlines():
+            email, _, pw = line.partition(" ")
+            if email:
+                merged[email] = pw
+    merged.update(logins)
+    out.write_text("\n".join(f"{k} {v}" for k, v in merged.items()) + "\n")
     print(f"demo API on {url}; logins in {out}; ctrl-c to stop", flush=True)
     await task
 

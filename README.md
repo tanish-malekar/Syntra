@@ -1,10 +1,10 @@
-# Syntra
+# BloomBee
 
 Fine-tune models on GPUs that people and data centers share, and earn from the GPUs you share.
 
 - **Providers** (individuals or data centers) run a small agent on a machine; its GPUs join a shared **pool**.
 - **Consumers** start a training run. The scheduler picks idle GPUs from the pool, splits the model across them
-  (LoRA via BloomBee), and keeps training if a GPU dies: it finds another idle GPU, loads that slice there, and continues.
+  (LoRA via the BloomBee swarm library), and keeps training if a GPU dies: it finds another idle GPU, loads that slice there, and continues.
   Closing a laptop lid takes that GPU out at once and triggers the same replacement.
 - **QLoRA**: choose "4-bit" base weights on the Train page and the frozen model takes about a third of the GPU memory, so it
   fits on fewer or smaller GPUs (slower steps). Deployments can also be served in 4-bit.
@@ -23,18 +23,18 @@ Fine-tune models on GPUs that people and data centers share, and earn from the G
 | Folder | What it is |
 |---|---|
 | `backend/` | FastAPI + SQLite: accounts, pool, scheduler, orchestrator, model registry, deployments, events, ledger |
-| `agent/` | Provider agent (`python -m syntra_agent`): Mac and NVIDIA discovery, worker processes, command channel, model downloads, lid watcher |
+| `agent/` | Provider agent (`python -m bloombee_agent`): Mac and NVIDIA discovery, worker processes, command channel, model downloads, lid watcher |
 | `frontend/` | React + Vite + TypeScript UI (light theme; Train is the landing page) |
-| `sdk/` | `syntra` Python SDK: training sessions (sample, forward_backward, optim_step, logprobs) and RL loops |
+| `sdk/` | `bloombee_sdk` Python SDK: training sessions (sample, forward_backward, optim_step, logprobs) and RL loops |
 | `provider-app/` | macOS menu bar app for providers: sign in once, click **Share my GPU**; shows status, GPU time used and earnings |
 | `bridge/` | SSH tunnels to a machine that cannot reach the platform directly (context3) |
 | `scripts/` | `dev.sh`, `demo_stack.py` (fake swarm for the UI), `e2e_real.py`, `e2e_context3.py` |
 | `experiments/` | The early BloomBee-on-Apple-GPU experiments the platform is built on |
 | `SCOPE.md`, `LATER.md` | What is built, and what is deliberately deferred or still open |
 
-BloomBee (fork branch `mac-mps-ft` of `tanish-malekar/BloomBee`: Apple-GPU support + fault-tolerant LoRA client) does the
-distributed work. The backend never imports it: each job runs a **swarm runner** (`backend/app/runner/swarm_runner.py`)
-under the Python interpreter named by `SYNTRA_BLOOMBEE_PYTHON`.
+This platform is built on the open-source BloomBee swarm library (fork branch `mac-mps-ft` of `tanish-malekar/BloomBee`:
+Apple-GPU support + fault-tolerant LoRA client), which does the distributed work. The backend never imports it: each job runs a **swarm runner** (`backend/app/runner/swarm_runner.py`)
+under the Python interpreter named by `BLOOMBEE_PYTHON`.
 
 ## Prerequisites
 
@@ -82,11 +82,11 @@ Training runs finish in about a minute and deployments answer instantly. Stop wi
 
 ```bash
 # backend: seeds data, starts on :8000 (dev logins are written to backend/.env.dev)
-SYNTRA_BLOOMBEE_PYTHON=~/bb-venv/bin/python SYNTRA_BLOOMBEE_DIR=~/BloomBee SYNTRA_MODELS_DIR=/path/to/models scripts/dev.sh
+BLOOMBEE_PYTHON=~/bb-venv/bin/python BLOOMBEE_DIR=~/BloomBee BLOOMBEE_MODELS_DIR=/path/to/models scripts/dev.sh
 # frontend
 cd frontend && npm install && npm run dev
 # a provider: sign up in the UI, "Provide GPUs" -> create profile -> create token, then run the command it shows, e.g.
-cd agent && python -m syntra_agent --server http://localhost:8000 --token <TOKEN> --bloombee-dir ~/BloomBee \
+cd agent && python -m bloombee_agent --server http://localhost:8000 --token <TOKEN> --bloombee-dir ~/BloomBee \
   --python ~/bb-venv/bin/python --models-dir /path/to/models --simulated --sim-count 3 --sim-memory-gb 6
 ```
 
@@ -94,8 +94,8 @@ cd agent && python -m syntra_agent --server http://localhost:8000 --token <TOKEN
 Without it the agent offers the Mac's real GPU (one) or every NVIDIA GPU that `nvidia-smi` shows idle (`--gpus 0,2` limits it).
 Real training takes minutes per run (TinyLlama-1.1B, a few seconds per step).
 
-Backend settings (environment): `SYNTRA_DB`, `SYNTRA_DATA_DIR`, `SYNTRA_BLOOMBEE_PYTHON`, `SYNTRA_BLOOMBEE_DIR`,
-`SYNTRA_MODELS_DIR`, `SYNTRA_DHT_PORT`, `SYNTRA_COOKIE_SECURE`, `SYNTRA_CORS_ORIGINS`.
+Backend settings (environment): `BLOOMBEE_DB`, `BLOOMBEE_DATA_DIR`, `BLOOMBEE_PYTHON`, `BLOOMBEE_DIR`,
+`BLOOMBEE_MODELS_DIR`, `BLOOMBEE_DHT_PORT`, `BLOOMBEE_COOKIE_SECURE`, `BLOOMBEE_CORS_ORIGINS`.
 
 ## 3. Two machines (this Mac and context3)
 
@@ -114,9 +114,9 @@ token and copy the command it shows:
 curl -fsSL https://<your-server>/join.sh | bash -s -- --token <TOKEN> --region home
 ```
 
-The first run installs everything under `~/.syntra` (Python 3.12 venv, BloomBee, the agent; needs Python 3.12 and git), then the
-GPU joins the pool. The server must be reachable from the internet: set `SYNTRA_PUBLIC_URL` to its address (for a test, a temporary
-tunnel to port 8000) and `SYNTRA_DHT_PORT=31001`. Status: built and unit-tested, not yet proven on two real networks (see `LATER.md`).
+The first run installs everything under `~/.bloombee` (Python 3.12 venv, BloomBee, the agent; needs Python 3.12 and git), then the
+GPU joins the pool. The server must be reachable from the internet: set `BLOOMBEE_PUBLIC_URL` to its address (for a test, a temporary
+tunnel to port 8000) and `BLOOMBEE_DHT_PORT=31001`. Status: built and unit-tested, not yet proven on two real networks (see `LATER.md`).
 
 Live demo (this Mac + a second MacBook that runs the command above + one idle context3 GPU that takes over when the second
 MacBook's lid is closed): `scripts/e2e_live.py` (usage in its docstring).
@@ -124,11 +124,11 @@ MacBook's lid is closed): `scripts/e2e_live.py` (usage in its docstring).
 ## 5. Share a Mac with one click (provider app)
 
 ```bash
-provider-app/build.sh --open      # builds provider-app/dist/SyntraProvider.app and starts it (menu bar icon)
+provider-app/build.sh --open      # builds provider-app/dist/BloomBeeProvider.app and starts it (menu bar icon)
 ```
 
-Sign in with the server address and your Syntra account, then click **Share my GPU**. The first time, the app installs the
-agent under `~/.syntra` (the same steps as `join.sh --install-only`). It keeps the agent running in the background and shows:
+Sign in with the server address and your BloomBee account, then click **Share my GPU**. The first time, the app installs the
+agent under `~/.bloombee` (the same steps as `join.sh --install-only`). It keeps the agent running in the background and shows:
 - shared / in use / paused / disconnected;
 - GPU time used and earnings, today and in total, including an estimate for the job running now.
 
@@ -163,7 +163,7 @@ What was measured is recorded in `LATER.md` (status and changelog).
 
 `user -> backend (REST + /ws/events)`; `agent -> backend (REST + /ws/agent)` (outbound only); `backend -> agent`: start/stop/kill worker.
 Per job: the runner hosts a DHT and the trainer/serving client; workers (one per leased GPU) join that DHT. Behind a tunnel, fixed port
-ranges are forwarded (`bridge/tunnel.py`, `--port-range` on the agent, `SYNTRA_DHT_PORT` on the backend).
+ranges are forwarded (`bridge/tunnel.py`, `--port-range` on the agent, `BLOOMBEE_DHT_PORT` on the backend).
 
 ## Known limits
 

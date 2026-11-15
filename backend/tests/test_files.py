@@ -15,7 +15,7 @@ from app.models import FineTunedModel, Gpu, Job, Lease
 from tests.platform_helper import Platform, wait_for
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "agent"))
-from syntra_agent.files import ensure_model_files  # noqa: E402
+from bloombee_agent.files import ensure_model_files  # noqa: E402
 
 
 def test_agent_downloads_a_merged_model_only_while_it_holds_a_lease(tmp_path):

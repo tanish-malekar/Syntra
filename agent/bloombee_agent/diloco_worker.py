@@ -1,7 +1,7 @@
 """A DiLoCo replica: holds the whole model on one GPU, trains `inner_steps` on its data shard, uploads theta_start - theta_end.
 
-    python -m syntra_agent.diloco_worker --server URL --job J --lease L --model PATH_OR_HF_ID --device mps|cuda|cpu
-    (token in SYNTRA_AGENT_TOKEN)
+    python -m bloombee_agent.diloco_worker --server URL --job J --lease L --model PATH_OR_HF_ID --device mps|cuda|cpu
+    (token in BLOOMBEE_AGENT_TOKEN)
 
 Started by the agent like a BloomBee worker (same "Running a server" / "Started" log lines, so the agent's online and
 crash detection work unchanged). Needs torch + transformers + safetensors + httpx (the BloomBee environment has them).
@@ -80,7 +80,7 @@ def main(argv=None) -> int:
     p.add_argument("--device", default="cpu")
     p.add_argument("--work-dir", default=".")
     a = p.parse_args(argv)
-    token = os.environ.get("SYNTRA_AGENT_TOKEN", "")
+    token = os.environ.get("BLOOMBEE_AGENT_TOKEN", "")
     log(f"Running a server on ['/diloco/job{a.job}/p2p/diloco{a.lease}']")  # the agent's peer-id line
 
     import torch

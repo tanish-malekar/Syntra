@@ -33,9 +33,9 @@ BASE_MODELS = [
 SAMPLE_DIR = BACKEND_DIR / "sample_data"
 
 DEV_ACCOUNTS = [
-    ("admin@syntra.test", "Admin", True),
-    ("alice@syntra.test", "Alice", False),
-    ("bob@syntra.test", "Bob", False),
+    ("admin@bloombee.test", "Admin", True),
+    ("alice@bloombee.test", "Alice", False),
+    ("bob@bloombee.test", "Bob", False),
 ]
 
 

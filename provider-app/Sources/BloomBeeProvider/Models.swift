@@ -1,6 +1,6 @@
 import Foundation
 
-/// What the local agent reports on `GET /status` (agent/syntra_agent/client.py `Agent.status`).
+/// What the local agent reports on `GET /status` (agent/bloombee_agent/client.py `Agent.status`).
 struct AgentStatus: Decodable, Equatable {
     struct GPU: Decodable, Equatable, Identifiable {
         let index: Int

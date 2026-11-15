@@ -1,4 +1,4 @@
-"""RL / custom-training sessions (Tinker-style) for the `syntra` SDK and the website.
+"""RL / custom-training sessions (Tinker-style) for the `bloombee_sdk` SDK and the website.
 
 A session leases GPUs, keeps a LoRA (or QLoRA) adapter in a trainer process on the platform, and answers one primitive per
 call: sample, logprobs, forward_backward (cross_entropy | dpo | ppo | importance_sampling), optim_step, advantages,

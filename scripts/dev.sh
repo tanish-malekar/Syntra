@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start the Syntra backend for development: creates the venv if needed, seeds data, runs uvicorn with reload.
+# Start the BloomBee backend for development: creates the venv if needed, seeds data, runs uvicorn with reload.
 set -euo pipefail
 cd "$(dirname "$0")/../backend"
 PY="${PYTHON:-/opt/homebrew/bin/python3.12}"

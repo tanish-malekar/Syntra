@@ -1,4 +1,4 @@
-"""Swarm runner: the per-job process that needs BloomBee (torch, hivemind). Runs under SYNTRA_BLOOMBEE_PYTHON.
+"""Swarm runner: the per-job process that needs BloomBee (torch, hivemind). Runs under BLOOMBEE_PYTHON.
 
 It is deliberately standalone (stdlib + BloomBee only; it does not import the backend) and talks to the backend through
 JSON lines on stdout (events) and, in serve mode, stdin (requests).
@@ -39,7 +39,7 @@ children: list[subprocess.Popen] = []
 
 def kill_group(pgid: int, sig: int = signal.SIGKILL) -> None:
     """Kill a process group but spare Python's multiprocessing resource_tracker: on macOS it must outlive its parent to
-    unlink the named semaphores, or they leak until reboot (see agent/syntra_agent/workers.py kill_process_group)."""
+    unlink the named semaphores, or they leak until reboot (see agent/bloombee_agent/workers.py kill_process_group)."""
     try:
         out = subprocess.run(["ps", "-A", "-o", "pid=,pgid=,command="], capture_output=True, text=True, timeout=5).stdout
         members = [l.split(None, 2) for l in out.splitlines()]

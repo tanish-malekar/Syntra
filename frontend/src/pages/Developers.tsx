@@ -3,16 +3,16 @@ import { api, type ApiKeyInfo, type RlSession } from "../api";
 import { ErrorBox, StatusChip, useToast } from "../components/ui";
 import { useLive } from "../state";
 
-const EXAMPLE = `import json, syntra
+const EXAMPLE = `import json, bloombee_sdk
 
-client = syntra.Client()   # SYNTRA_API_KEY, SYNTRA_BASE_URL
+client = bloombee_sdk.Client()   # BLOOMBEE_API_KEY, BLOOMBEE_BASE_URL
 with client.training_session("TinyLlama-1.1B-Chat", rank=16, weight_bits=4, gpus=2) as tc:
     def reward(prompt, completion, sample):
         try:
             json.loads(completion); return 1.0
         except ValueError:
             return 0.0
-    syntra.rl.grpo(tc, prompts, reward, iterations=20, group_size=8, lr=1e-5)
+    bloombee_sdk.rl.grpo(tc, prompts, reward, iterations=20, group_size=8, lr=1e-5)
     tc.save("my-grpo-model")   # appears in My models`;
 
 export default function DevelopersPage() {
@@ -70,7 +70,7 @@ export default function DevelopersPage() {
         </div>
         <div className="card stack">
           <h2>Quick start</h2>
-          <pre className="mono small" style={{ whiteSpace: "pre-wrap", margin: 0 }}>{`pip install -e sdk/\nexport SYNTRA_API_KEY=syn_key_...\nexport SYNTRA_BASE_URL=${window.location.origin.replace(":5173", ":8000")}`}</pre>
+          <pre className="mono small" style={{ whiteSpace: "pre-wrap", margin: 0 }}>{`pip install -e sdk/\nexport BLOOMBEE_API_KEY=syn_key_...\nexport BLOOMBEE_BASE_URL=${window.location.origin.replace(":5173", ":8000")}`}</pre>
           <pre className="mono small" style={{ whiteSpace: "pre-wrap", margin: 0 }}>{EXAMPLE}</pre>
           <p className="small muted">Losses: cross_entropy, dpo, ppo, importance_sampling. Sessions with no call for 10 minutes are saved and closed automatically.</p>
         </div>

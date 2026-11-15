@@ -8,7 +8,7 @@ from app.main import create_app
 def test_website_and_api_share_one_address(tmp_path):
     web = tmp_path / "dist"
     (web / "assets").mkdir(parents=True)
-    (web / "index.html").write_text("<!doctype html><title>Syntra</title>")
+    (web / "index.html").write_text("<!doctype html><title>BloomBee</title>")
     (web / "assets" / "app.js").write_text("console.log(1)")
     app = create_app(Settings(database_url="sqlite://", run_background_tasks=False, web_dir=str(web)))
     with TestClient(app) as c:

@@ -3,11 +3,11 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "syntra-sdk"
+name = "bloombee-sdk"
 version = "0.1.0"
-description = "Train LoRA / QLoRA adapters with RL (GRPO, PPO, DPO) on Syntra's shared GPU pool"
+description = "Train LoRA / QLoRA adapters with RL (GRPO, PPO, DPO) on BloomBee's shared GPU pool"
 requires-python = ">=3.10"
 dependencies = ["httpx>=0.27"]
 
 [tool.setuptools.packages.find]
-include = ["syntra*"]
+include = ["bloombee_sdk*"]

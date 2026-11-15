@@ -2,7 +2,7 @@
 
 Our own Mario-style platformer (original art, drawn in code) plus **Qwen2.5-0.5B-Instruct** that plays it by reading
 the screen as text and answering with one digit. It is trained with **PPO** (LoRA adapters + a value head) on
-context3 GPUs. Standalone: nothing here touches the Syntra app.
+context3 GPUs. Standalone: nothing here touches the BloomBee app.
 
 ## Run the demo page
 
