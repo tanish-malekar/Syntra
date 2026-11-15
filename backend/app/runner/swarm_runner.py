@@ -37,10 +37,33 @@ def emit(obj: dict) -> None:
 children: list[subprocess.Popen] = []
 
 
+def kill_group(pgid: int, sig: int = signal.SIGKILL) -> None:
+    """Kill a process group but spare Python's multiprocessing resource_tracker: on macOS it must outlive its parent to
+    unlink the named semaphores, or they leak until reboot (see agent/syntra_agent/workers.py kill_process_group)."""
+    try:
+        out = subprocess.run(["ps", "-A", "-o", "pid=,pgid=,command="], capture_output=True, text=True, timeout=5).stdout
+        members = [l.split(None, 2) for l in out.splitlines()]
+        members = [(int(m[0]), m[2] if len(m) > 2 else "") for m in members if len(m) >= 2 and m[1] == str(pgid)]
+    except Exception:
+        members = []
+    if not members:
+        try:
+            os.killpg(pgid, sig)
+        except Exception:
+            pass
+        return
+    for pid, command in members:
+        if "multiprocessing.resource_tracker" not in command:
+            try:
+                os.kill(pid, sig)
+            except Exception:
+                pass
+
+
 def _shutdown(*_):
     for c in children:
         try:
-            os.killpg(c.pid, signal.SIGKILL)
+            kill_group(c.pid)
         except Exception:
             pass
     sys.stdout.flush()
@@ -104,6 +127,8 @@ def run_train() -> int:
            "--update_period", "2", "--max_backoff", "5"]
     if spec.get("lora_alpha"):
         cmd += ["--lora_alpha", str(spec["lora_alpha"])]
+    if spec.get("init_adapter"):  # continue from a stored model (its rank and alpha come from the adapter)
+        cmd += ["--resume_adapter", spec["init_adapter"]]
     log_path = out / "trainer.log"
     logf = open(log_path, "w")
     # Output goes to a file that we tail: BloomBee's helper processes inherit pipes and keep them open after the trainer
@@ -135,7 +160,7 @@ def run_train() -> int:
         time.sleep(0.2)
     drain()
     try:  # the trainer's own helper processes (DHT, p2pd) must not outlive it
-        os.killpg(proc.pid, signal.SIGKILL)
+        kill_group(proc.pid)
     except Exception:
         pass
     rc = proc.returncode
@@ -182,15 +207,108 @@ def run_serve() -> int:
     return 0
 
 
+def build_engine():
+    """A DistributedLoRA client on the swarm (fresh adapter, or continuing from a stored one) wrapped in the RL engine."""
+    import torch
+    from transformers import AutoTokenizer
+    from bloombee import AutoDistributedModelForCausalLM, DistributedLoRA, LoRAConfig
+    from rl_engine import Engine
+
+    device = pick_device()
+    tok = AutoTokenizer.from_pretrained(spec["model_path"])
+    base = AutoDistributedModelForCausalLM.from_pretrained(
+        spec["model_path"], initial_peers=peers, dht_prefix=prefix, torch_dtype=torch.float16,
+        request_timeout=float(spec.get("request_timeout", 60)), connect_timeout=10, update_period=2, max_backoff=5,
+        max_retries=None,  # retry forever: a dead worker is replaced by the platform and the call continues
+    ).to(device)
+    if spec.get("init_adapter"):
+        lora = DistributedLoRA.from_pretrained(base, spec["init_adapter"])
+    else:
+        lora = DistributedLoRA(base, LoRAConfig(int(spec.get("rank", 8)), float(spec.get("lora_alpha", 16)), 0.0,
+                                                tuple(spec.get("target_modules", ("q_proj", "v_proj")))))
+    lora.to(device).train()
+    params = dict(lora._adapter_state())
+    engine = Engine(lambda ids: lora(input_ids=ids, use_cache=False).logits, params, tok, device,
+                    save_fn=lambda path: lora.save_pretrained(path), max_seq_len=int(spec.get("max_seq_len", 1024)))
+    return engine
+
+
+def run_session() -> int:
+    """Tinker-style training session: one request per stdin line {"op", "id", "args"}, one reply per request."""
+    from rl_engine import EngineError
+
+    engine = build_engine()
+    emit({"type": "serve_ready", "device": pick_device(), **engine.state()})
+    saves = Path(spec["output_dir"]) / "saves"
+    for raw in sys.stdin:
+        raw = raw.strip()
+        if not raw:
+            continue
+        req = json.loads(raw)
+        if req.get("op") == "shutdown":
+            break
+        rid, op, args = req.get("id"), req.get("op"), dict(req.get("args") or {})
+        t = time.monotonic()
+        try:
+            if op == "save":  # where adapters go is decided here, not by the caller
+                name = "".join(c for c in str(args.get("name", "")) if c.isalnum() or c in "-_")[:60] or f"step{engine.steps}"
+                args = {"out_dir": str(saves / f"{name}-{int(time.time())}")}
+            data = engine.call(op, args)
+            emit({"type": "result", "id": rid, "data": data, "seconds": round(time.monotonic() - t, 3)})
+        except EngineError as exc:
+            emit({"type": "error", "id": rid, "error": str(exc), "bad_request": True})
+        except Exception as exc:  # a swarm failure the client could not recover from: report, keep the session alive
+            emit({"type": "error", "id": rid, "error": f"{type(exc).__name__}: {str(exc)[:300]}"})
+    return 0
+
+
+def run_dpo() -> int:
+    """Managed DPO: pairs {"prompt", "chosen", "rejected"} from the dataset file; reference = the adapter at the start."""
+    import random
+
+    engine = build_engine()
+    rows = [json.loads(l) for l in Path(spec["dataset_path"]).read_text().splitlines() if l.strip()]
+    pairs = []
+    for r in rows:
+        prompt = engine.tok(r["prompt"])["input_ids"]
+        pairs.append({"chosen": {"tokens": prompt + engine.tok(r["chosen"], add_special_tokens=False)["input_ids"], "prompt_len": len(prompt)},
+                      "rejected": {"tokens": prompt + engine.tok(r["rejected"], add_special_tokens=False)["input_ids"], "prompt_len": len(prompt)}})
+    batch_size, beta = int(spec.get("batch_size", 2)), float(spec.get("beta", 0.1))
+    refs = []
+    for i in range(0, len(pairs), batch_size):  # reference log-probs once, before any update
+        refs.extend(engine.reference_sums(pairs[i: i + batch_size]))
+    for p, (c, r) in zip(pairs, refs):
+        p["ref_chosen"], p["ref_rejected"] = c, r
+    rng = random.Random(int(spec.get("seed", 42)))
+    last = time.monotonic()
+    for step in range(1, int(spec["steps"]) + 1):
+        batch = rng.sample(pairs, min(batch_size, len(pairs)))
+        out = engine.forward_backward("dpo", batch, beta=beta)
+        opt = engine.optim_step(lr=float(spec.get("lr", 5e-5)))
+        now = time.monotonic()
+        emit({"type": "train.step", "step": step, "loss": round(out["loss"], 6), "grad_norm": round(opt["grad_norm"], 6),
+              "step_seconds": round(now - last, 3), **{k: round(v, 4) for k, v in out["metrics"].items()}})
+        last = now
+    out_dir = Path(spec["output_dir"]) / "adapter"
+    engine.save(str(out_dir))
+    emit({"type": "train.finished", "returncode": 0, "adapter_dir": str(out_dir), "tail": []})
+    return 0
+
+
 try:
-    rc = run_train() if spec["kind"] == "train" else run_serve()
+    if spec["kind"] == "train":
+        rc = run_dpo() if spec.get("method") == "dpo" else run_train()
+    elif spec["kind"] == "session":
+        rc = run_session()
+    else:
+        rc = run_serve()
 except Exception as exc:
     emit({"type": "runner_error", "error": f"{type(exc).__name__}: {str(exc)[:500]}"})
     rc = 1
 sys.stdout.flush()
 for c in children:
     try:
-        os.killpg(c.pid, signal.SIGKILL)
+        kill_group(c.pid)
     except Exception:
         pass
 try:

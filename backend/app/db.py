@@ -41,10 +41,22 @@ def make_engine(url: str):
     return engine
 
 
+# Columns added after a release: (table, column, SQL type and default). create_all() never alters an existing table.
+_ADDED_COLUMNS = [("gpu", "supports_4bit", "BOOLEAN NOT NULL DEFAULT 0"),
+                  ("agenttoken", "machine_id", "VARCHAR NOT NULL DEFAULT ''"),
+                  ("dataset", "format", "VARCHAR NOT NULL DEFAULT 'text'")]
+
+
 def init_db(engine) -> None:
     from app import models  # noqa: F401  (register tables)
 
     SQLModel.metadata.create_all(engine)
+    if engine.dialect.name == "sqlite":
+        with engine.begin() as conn:
+            for table, column, ddl in _ADDED_COLUMNS:
+                have = {row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table})")}
+                if column not in have:
+                    conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
 
 def get_session(request: Request):

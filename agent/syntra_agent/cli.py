@@ -6,10 +6,16 @@ import asyncio
 import logging
 import os
 import signal
+import sys
 from pathlib import Path
 
-from syntra_agent.client import Agent, AgentSettings
+from syntra_agent.client import Agent, AgentRevoked, AgentSettings
+from syntra_agent.control import AlreadyRunning, InstanceLock
 from syntra_agent.workers import AgentConfig
+
+# exit codes the desktop app understands
+EXIT_REVOKED = 3
+EXIT_ALREADY_RUNNING = 4
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -31,6 +37,9 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--sim-count", type=int, default=2)
     p.add_argument("--sim-memory-gb", type=float, default=6.0)
     p.add_argument("--heartbeat-interval", type=float, default=2.0)
+    p.add_argument("--control", action="store_true",
+                   help="serve the local control API for the Syntra desktop app (127.0.0.1; one agent per machine)")
+    p.add_argument("--state-dir", type=Path, default=Path("~/.syntra"), help="where the control API info and lock live")
     p.add_argument("-v", "--verbose", action="store_true")
     args = p.parse_args(argv)
     if not args.token:
@@ -54,7 +63,15 @@ def main(argv=None) -> None:
     allow = [int(x) for x in args.gpus.split(",")] if args.gpus else None
     settings = AgentSettings(server=args.server, token=args.token, region=args.region, gpu_allowlist=allow,
                              heartbeat_interval=args.heartbeat_interval, simulated=args.simulated,
-                             sim_count=args.sim_count, sim_memory_gb=args.sim_memory_gb, relay=args.relay)
+                             sim_count=args.sim_count, sim_memory_gb=args.sim_memory_gb, relay=args.relay,
+                             control=args.control, state_dir=args.state_dir.expanduser())
+    lock = InstanceLock(settings.state_dir) if args.control else None
+    if lock is not None:
+        try:
+            lock.acquire()
+        except AlreadyRunning as exc:
+            print(f"syntra_agent: {exc}", file=sys.stderr)
+            sys.exit(EXIT_ALREADY_RUNNING)
     agent = Agent(settings, cfg)
 
     async def runner() -> None:
@@ -67,6 +84,14 @@ def main(argv=None) -> None:
         asyncio.run(runner())
     except KeyboardInterrupt:
         pass
+    except AgentRevoked as exc:
+        print(f"syntra_agent: {exc}", file=sys.stderr)
+        sys.exit(EXIT_REVOKED)
+    finally:
+        if lock is not None:
+            lock.release()
+    if agent.state == "revoked":
+        sys.exit(EXIT_REVOKED)
 
 
 if __name__ == "__main__":

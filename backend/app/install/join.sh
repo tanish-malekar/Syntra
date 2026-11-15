@@ -2,23 +2,27 @@
 # Join the Syntra GPU pool from this machine. It only makes outgoing connections: no open ports, no SSH, any network.
 #
 #   curl -fsSL __SERVER__/join.sh | bash -s -- --token <TOKEN> [--region NAME] [--gpus 0,1]
+#   curl -fsSL __SERVER__/join.sh | bash -s -- --install-only      (what the Syntra desktop app runs: install, then exit)
 #
 # First run installs everything under ~/.syntra (a Python venv, BloomBee, the Syntra agent); later runs start at once.
+# Only one agent runs per machine: a second copy (terminal or desktop app) exits with code 4.
 set -euo pipefail
 
 SERVER="__SERVER__"
 TOKEN="${SYNTRA_AGENT_TOKEN:-}"
 REGION=""
 GPUS=""
+INSTALL_ONLY=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --token) TOKEN="$2"; shift 2 ;;
     --region) REGION="$2"; shift 2 ;;
     --gpus) GPUS="$2"; shift 2 ;;
+    --install-only) INSTALL_ONLY=1; shift ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
-[ -n "$TOKEN" ] || { echo "Missing --token. Create one on the Provide GPUs page." >&2; exit 2; }
+[ -n "$TOKEN" ] || [ "$INSTALL_ONLY" = 1 ] || { echo "Missing --token. Create one on the Provide GPUs page." >&2; exit 2; }
 
 SYNTRA_HOME="${SYNTRA_HOME:-$HOME/.syntra}"
 mkdir -p "$SYNTRA_HOME"
@@ -56,10 +60,16 @@ fi
 step "Syntra agent"
 rm -rf "$SYNTRA_HOME/agent" && mkdir -p "$SYNTRA_HOME/agent"
 curl -fsSL "$SERVER/install/agent.tgz" | tar xz -C "$SYNTRA_HOME/agent"
+"$VPY" -c "import sys; sys.path.insert(0, '$SYNTRA_HOME/agent'); import syntra_agent.cli" || { echo "The agent did not install correctly." >&2; exit 1; }
+
+if [ "$INSTALL_ONLY" = 1 ]; then
+  step "Installed. The Syntra app starts the agent."
+  exit 0
+fi
 
 step "Joining the pool (leave this window open; Ctrl-C to leave)"
 ARGS=(--server "$SERVER" --token "$TOKEN" --relay --bloombee-dir "$SYNTRA_HOME/BloomBee" --python "$VPY"
-      --models-dir "$SYNTRA_HOME/models" --work-dir "$SYNTRA_HOME/work")
+      --models-dir "$SYNTRA_HOME/models" --work-dir "$SYNTRA_HOME/work" --control --state-dir "$SYNTRA_HOME")
 [ -n "$REGION" ] && ARGS+=(--region "$REGION")
 [ -n "$GPUS" ] && ARGS+=(--gpus "$GPUS")
 cd "$SYNTRA_HOME/agent"

@@ -44,7 +44,8 @@ export function describeEvent(e: StoredEvent): TimelineItem | null {
     case "worker.starting": return { key, ts: e.ts, tone: "info", title: "Starting a worker", detail: layersLabel(p.layer_start, p.layer_end) };
     case "worker.online": return { key, ts: e.ts, tone: "good", title: "Worker online", detail: `${layersLabel(p.layer_start, p.layer_end)} · ${String(p.peer_id).slice(0, 12)}…` };
     case "worker.down": {
-      const why = p.reason === "killed_by_user" ? "you stopped it" : p.reason === "heartbeat_timeout" ? "the GPU stopped answering" : "it exited";
+      const why = p.reason === "killed_by_user" ? "you stopped it" : p.reason === "heartbeat_timeout" ? "the GPU stopped answering"
+        : p.reason === "failed_to_start" ? `it failed to start${p.detail ? ` (${p.detail})` : ""}` : "it exited";
       return { key, ts: e.ts, tone: "bad", title: `A worker went down (${why})`, detail: layersLabel(p.layer_start, p.layer_end) };
     }
     case "worker.replacement_waiting":

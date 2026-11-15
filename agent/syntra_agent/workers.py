@@ -14,6 +14,8 @@ from typing import Awaitable, Callable, Optional
 
 PEER_RE = re.compile(r"Running a server on \[[^\]]*?/p2p/([A-Za-z0-9]+)'")
 STARTED_RE = re.compile(r"\]\s+Started\s*$")
+TRACEBACK_RE = re.compile(r"^Traceback \(most recent call last\):")
+ERROR_LINE_RE = re.compile(r"^([A-Za-z_][\w.]*(Error|Exception|Interrupt)\b.*)$")
 
 
 @dataclass
@@ -26,6 +28,12 @@ class AgentConfig:
     port_range: Optional[tuple] = None  # (first, last): worker ports to use (forwarded when the machine sits behind a tunnel)
     update_period: float = 2.0  # how often a worker re-announces its blocks in the DHT (seconds)
     expiration: float = 15.0  # how long an announcement stays valid; must comfortably exceed how long one announcement takes
+    # A worker that crashes while starting can leave its main process hanging (e.g. a helper process failed to create a
+    # semaphore): the platform would wait for it forever. Such workers are killed so the platform replaces them.
+    crash_grace: float = 15.0  # seconds after a traceback before a not-yet-online worker is killed
+    startup_timeout: float = 1200.0  # a worker not online after this long is killed (weights download included)
+    server: str = ""  # platform URL and this machine's token: DiLoCo replicas fetch weights and upload updates themselves
+    token: str = ""
 
 
 @dataclass
@@ -42,6 +50,10 @@ class WorkerSpec:
     host_maddr: Optional[str] = None  # e.g. /ip4/127.0.0.1/tcp/31002
     announce_maddr: Optional[str] = None
     batch_size: int = 2
+    weight_bits: int = 16  # 16 = float16 base weights; 4 = 4-bit compressed base (QLoRA training / light serving)
+    kind: str = "bloombee"  # bloombee (pipeline stage) | diloco (full fine-tuning replica holding the whole model)
+    job_id: int = 0
+    lease_id: int = 0
     extra_env: dict = field(default_factory=dict)
 
     @classmethod
@@ -61,8 +73,33 @@ def resolve_model(model: dict, cfg: AgentConfig) -> str:
     return model.get("hf_id") or str(local)
 
 
+def build_diloco_command(spec: WorkerSpec, cfg: AgentConfig) -> tuple[list[str], dict]:
+    """A DiLoCo replica: plain torch + transformers (no BloomBee), talks to the platform over HTTP with this machine's token."""
+    if not cfg.server or not cfg.token:
+        raise ValueError("DiLoCo replicas need the platform address and token (set by the agent)")
+    model = resolve_model(spec.model, cfg)
+    argv = [cfg.python, "-m", "syntra_agent.diloco_worker", "--server", cfg.server, "--job", str(spec.job_id),
+            "--lease", str(spec.lease_id), "--model", model, "--device", spec.device,
+            "--work-dir", str(Path(cfg.work_dir).expanduser() / f"diloco-{spec.worker_id}")]
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parent.parent) + os.pathsep + env.get("PYTHONPATH", "")
+    env["SYNTRA_AGENT_TOKEN"] = cfg.token  # environment, not argv: other users cannot read it with ps
+    if spec.device == "cuda":
+        env["CUDA_VISIBLE_DEVICES"] = str(spec.device_index)
+    if cfg.hf_home:
+        env["HF_HOME"] = str(cfg.hf_home)
+    if Path(model).exists():
+        env["HF_HUB_OFFLINE"] = "1"
+    env.update({k: str(v) for k, v in spec.extra_env.items()})
+    return argv, env
+
+
 def build_bloombee_command(spec: WorkerSpec, cfg: AgentConfig) -> tuple[list[str], dict]:
     """The exact run_server flags verified in the fail-over and deploy experiments."""
+    if spec.kind == "diloco":
+        return build_diloco_command(spec, cfg)
+    if spec.kind != "bloombee":
+        raise ValueError(f"unknown worker kind {spec.kind!r}")
     model = resolve_model(spec.model, cfg)
     argv = [
         cfg.python, "-m", "bloombee.cli.run_server", model,
@@ -75,6 +112,10 @@ def build_bloombee_command(spec: WorkerSpec, cfg: AgentConfig) -> tuple[list[str
         "--cache_gpu_percent", "100", "--w_gpu_percent", "100", "--device", spec.device,
         "--host_maddrs", spec.host_maddr or "/ip4/127.0.0.1/tcp/0",
     ]
+    if spec.weight_bits == 4:
+        argv += ["--compress_weight"]
+    elif spec.weight_bits != 16:
+        raise ValueError(f"unsupported weight_bits {spec.weight_bits} (use 16 or 4)")
     if spec.announce_maddr:
         argv += ["--announce_maddrs", spec.announce_maddr]
     argv += ["--initial_peers", *spec.initial_peers]
@@ -94,6 +135,53 @@ def build_bloombee_command(spec: WorkerSpec, cfg: AgentConfig) -> tuple[list[str
     return argv, env
 
 
+def group_members(pgid: int) -> list[tuple[int, str]]:
+    """(pid, command) of every process in a process group."""
+    import subprocess
+    try:
+        out = subprocess.run(["ps", "-A", "-o", "pid=,pgid=,command="], capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    members = []
+    for line in out.splitlines():
+        parts = line.split(None, 2)
+        if len(parts) >= 2 and parts[1] == str(pgid):
+            members.append((int(parts[0]), parts[2] if len(parts) > 2 else ""))
+    return members
+
+
+def kill_process_group(pgid: int, sig: int = signal.SIGKILL) -> None:
+    """Kill a worker's whole process group, except Python's multiprocessing resource_tracker.
+
+    With the spawn start method (the macOS default) every multiprocessing lock keeps a *named* POSIX semaphore until the
+    resource_tracker unlinks it. If the tracker is killed too, the names leak until the machine reboots, and after ~10,000
+    of them (kern.posix.sem.max) no Python program on the Mac can create a lock any more. Left alive, the tracker notices
+    its parent is gone, unlinks everything and exits by itself."""
+    members = group_members(pgid)
+    if not members:  # cannot list (or already gone): fall back to the whole group
+        try:
+            os.killpg(pgid, sig)
+        except ProcessLookupError:
+            pass
+        return
+    for pid, command in members:
+        if "multiprocessing.resource_tracker" in command:
+            continue
+        try:
+            os.kill(pid, sig)
+        except ProcessLookupError:
+            pass
+
+
+def supports_4bit(cfg: AgentConfig) -> bool:
+    """Whether this machine's BloomBee checkout has the --compress_weight flag (4-bit base weights)."""
+    try:
+        cli = Path(cfg.bloombee_dir).expanduser() / "src" / "bloombee" / "cli" / "run_server.py"
+        return "--compress_weight" in cli.read_text()
+    except OSError:
+        return False
+
+
 EventCallback = Callable[[dict], Awaitable[None]]
 
 
@@ -104,7 +192,8 @@ class Worker:
     started_at: float = field(default_factory=time.monotonic)
     peer_id: str = ""
     online: bool = False
-    stop_reason: str = ""  # set when we ended it on purpose: killed | stopped
+    stop_reason: str = ""  # set when we ended it on purpose: killed | stopped | failed_to_start
+    error: str = ""  # last error line seen before the worker came online
     task: Optional[asyncio.Task] = None
 
 
@@ -164,8 +253,21 @@ class WorkerManager:
         await self._update_caffeinate()
         return worker
 
+    async def _fail_unless_online(self, worker: Worker, delay: float, why: str) -> None:
+        await asyncio.sleep(delay)
+        if not worker.online and worker.proc.returncode is None:
+            worker.stop_reason, worker.error = "failed_to_start", worker.error or why
+            try:
+                kill_process_group(worker.proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
     async def _watch(self, worker: Worker, log_path: Path) -> None:
         spec = worker.spec
+        startup_guard = asyncio.create_task(self._fail_unless_online(worker, self.cfg.startup_timeout,
+                                                                     f"not online after {self.cfg.startup_timeout:.0f} s"))
+        crash_guard: Optional[asyncio.Task] = None
+        in_traceback = False
         with open(log_path, "ab") as log:
             assert worker.proc.stdout is not None
             while True:
@@ -175,6 +277,13 @@ class WorkerManager:
                 log.write(line)
                 log.flush()
                 text = line.decode(errors="replace").rstrip()
+                if not worker.online:
+                    if TRACEBACK_RE.match(text):
+                        in_traceback = True
+                    elif in_traceback and ERROR_LINE_RE.match(text):
+                        in_traceback, worker.error = False, text[:300]
+                        if crash_guard is None:
+                            crash_guard = asyncio.create_task(self._fail_unless_online(worker, self.cfg.crash_grace, text[:300]))
                 if not worker.peer_id:
                     m = PEER_RE.search(text)
                     if m:
@@ -187,9 +296,15 @@ class WorkerManager:
                                          "peer_id": worker.peer_id,
                                          "seconds_to_online": round(time.monotonic() - worker.started_at, 2)})
         code = await worker.proc.wait()
+        for guard in (startup_guard, crash_guard):
+            if guard is not None:
+                guard.cancel()
         reason = worker.stop_reason or "exited"
-        await self.on_event({"type": "worker.exited", "worker_id": spec.worker_id, "returncode": code,
-                             "reason": reason, "layers": [spec.layer_start, spec.layer_end]})
+        event = {"type": "worker.exited", "worker_id": spec.worker_id, "returncode": code,
+                 "reason": reason, "layers": [spec.layer_start, spec.layer_end]}
+        if worker.error and not worker.online:
+            event["error"] = worker.error
+        await self.on_event(event)
         await self._update_caffeinate()
 
     async def kill(self, worker_id: str) -> bool:
@@ -199,7 +314,7 @@ class WorkerManager:
             return False
         w.stop_reason = "killed"
         try:
-            os.killpg(w.proc.pid, signal.SIGKILL)
+            kill_process_group(w.proc.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
         return True
@@ -217,7 +332,7 @@ class WorkerManager:
             await asyncio.wait_for(w.proc.wait(), grace)
         except asyncio.TimeoutError:
             try:
-                os.killpg(w.proc.pid, signal.SIGKILL)
+                kill_process_group(w.proc.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
         return True

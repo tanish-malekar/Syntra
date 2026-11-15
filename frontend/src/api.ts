@@ -1,5 +1,7 @@
 // Typed client for the Syntra backend (cookie session, JSON).
-export const API: string = (import.meta.env.VITE_API as string | undefined) ?? "http://localhost:8000";
+// Dev server: the backend on :8000. Production build (served by the backend itself): the same origin under /api.
+export const API: string = (import.meta.env.VITE_API as string | undefined)
+  ?? (import.meta.env.DEV ? "http://localhost:8000" : `${window.location.origin}/api`);
 
 export class ApiError extends Error {
   status: number;
@@ -47,7 +49,9 @@ export interface Gpu {
 }
 export interface GpuClass { id: number; name: string; price_per_hour: number; device_hint: string }
 export interface BaseModel { id: number; name: string; hf_id: string; family: string; num_layers: number; hidden_size: number; per_layer_memory_mb: number }
-export interface Dataset { id: number; name: string; num_rows: number; builtin: boolean; has_heldout: boolean; created_at: string }
+export interface Dataset { id: number; name: string; num_rows: number; builtin: boolean; has_heldout: boolean; format: "text" | "preference"; created_at: string }
+export interface ApiKeyInfo { id: number; label: string; created_at: string; last_used_at: string | null; revoked: boolean; key?: string }
+export interface RlSession { id: number; status: string; ready: boolean; base_model: string; config: Record<string, unknown>; job: Job }
 export interface Stage {
   gpu_id: number; gpu_name: string; gpu_class: string; device: string; provider: string; region: string;
   layer_start: number; layer_end: number; memory_needed_mb: number; free_memory_mb: number; price_per_hour: number;
@@ -71,11 +75,12 @@ export interface EvalScores {
 }
 export interface Model {
   id: number; name: string; base_model: string; base_model_id: number; job_id: number | null; created_at: string;
-  scores: EvalScores; deployed: boolean;
+  scores: EvalScores; deployed: boolean; weight_bits: WeightBits; method: "sft" | "dpo" | "session" | "full"; parent_model_id: number | null;
 }
 export interface Deployment {
   id: number; model_kind: "base" | "finetuned"; model_name: string; base_model: string; finetuned_model_id: number | null;
-  status: "queued" | "starting" | "running" | "stopped" | "failed"; num_gpus: number; endpoint: string; created_at: string; job: Job;
+  status: "queued" | "starting" | "running" | "stopped" | "failed"; num_gpus: number; endpoint: string; created_at: string;
+  weight_bits: WeightBits; job: Job;
 }
 export interface GenerateParams {
   prompt: string; max_new_tokens?: number; do_sample?: boolean; temperature?: number; top_p?: number; top_k?: number; seed?: number;
@@ -85,9 +90,13 @@ export interface LedgerLine { id: number; created_at: string; gpu_class: string;
 export interface Ledger { total: number; gpu_seconds: number; entries: LedgerLine[] }
 export interface StoredEvent { id: number | null; type: string; ts: string; job_id: number | null; gpu_id: number | null; payload: Record<string, any> }
 
+/** Precision of the frozen base weights on the workers: 16 = float16, 4 = 4-bit (QLoRA training / light serving). */
+export type WeightBits = 16 | 4;
+
 export interface JobInput {
   base_model_id: number; dataset_id: number; requested_gpus: number | null; trusted_only: boolean; steps: number;
-  batch_size?: number; seq_len?: number; lr?: number; rank?: number; name?: string;
+  batch_size?: number; seq_len?: number; lr?: number; rank?: number; weight_bits?: WeightBits; name?: string;
+  method?: "sft" | "dpo" | "diloco"; beta?: number; init_model_id?: number | null; inner_steps?: number;
 }
 
 // ---------------------------------------------------------------------------------------------- calls
@@ -117,8 +126,8 @@ export const api = {
     form.append("file", file);
     return request<Dataset>("/datasets", { method: "POST", body: form });
   },
-  plan: (baseModelId: number, requestedGpus: number | null, trustedOnly: boolean) => {
-    const q = new URLSearchParams({ base_model_id: String(baseModelId), trusted_only: String(trustedOnly) });
+  plan: (baseModelId: number, requestedGpus: number | null, trustedOnly: boolean, weightBits: WeightBits = 16, method = "sft") => {
+    const q = new URLSearchParams({ base_model_id: String(baseModelId), trusted_only: String(trustedOnly), weight_bits: String(weightBits), method });
     if (requestedGpus) q.set("requested_gpus", String(requestedGpus));
     return get<Plan>(`/plans?${q}`);
   },
@@ -138,7 +147,8 @@ export const api = {
 
   deployments: () => get<Deployment[]>("/deployments"),
   deployment: (id: number) => get<Deployment>(`/deployments/${id}`),
-  deploy: (body: { model_kind: "base" | "finetuned"; base_model_id?: number; finetuned_model_id?: number; requested_gpus: number | null; trusted_only?: boolean }) =>
+  deploy: (body: { model_kind: "base" | "finetuned"; base_model_id?: number; finetuned_model_id?: number; requested_gpus: number | null;
+                   trusted_only?: boolean; weight_bits?: WeightBits }) =>
     post<Deployment>("/deployments", body),
   stopDeployment: (id: number) => post<{ ok: boolean }>(`/deployments/${id}/stop`),
   generate: (id: number, params: GenerateParams) => post<Generation>(`/deployments/${id}/generate`, params),
@@ -146,6 +156,12 @@ export const api = {
     post<{ prompt: string; base: Generation; finetuned: Generation; sampled: boolean }>("/compare", {
       ...params, base_deployment_id: baseId, tuned_deployment_id: tunedId,
     }),
+
+  apiKeys: () => get<ApiKeyInfo[]>("/api-keys"),
+  createApiKey: (label: string) => post<ApiKeyInfo>("/api-keys", { label }),
+  revokeApiKey: (id: number) => del(`/api-keys/${id}`),
+  sessions: () => get<RlSession[]>("/sessions"),
+  closeSession: (id: number, saveAs: string | null) => post<{ ok: boolean; model_id: number | null }>(`/sessions/${id}/close`, { save_as: saveAs }),
 
   earnings: () => get<Ledger>("/ledger/earnings"),
   costs: () => get<Ledger>("/ledger/costs"),

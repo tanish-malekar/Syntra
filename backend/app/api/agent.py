@@ -24,6 +24,7 @@ class GpuRegisterIn(BaseModel):
     free_memory_mb: int | None = Field(default=None, ge=0)
     region: str = Field(default="", max_length=60)
     simulated: bool = False
+    supports_4bit: bool = False  # older agents do not send it: their GPUs only run float16 jobs
 
 
 class HeartbeatIn(BaseModel):
@@ -74,6 +75,7 @@ def register_gpu(
     gpu.free_memory_mb = body.total_memory_mb if body.free_memory_mb is None else body.free_memory_mb
     gpu.region = body.region
     gpu.simulated = body.simulated
+    gpu.supports_4bit = body.supports_4bit
     gpu.status = "idle"
     gpu.last_heartbeat = utcnow()
     session.add(gpu)

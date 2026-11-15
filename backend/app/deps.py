@@ -9,7 +9,7 @@ from fastapi import Depends, HTTPException, Request
 from sqlmodel import Session, select
 
 from app.db import get_session, utcnow
-from app.models import AgentToken, AuthSession, Provider, User
+from app.models import AgentToken, ApiKey, AuthSession, Provider, User
 from app.security import token_hash
 
 
@@ -68,9 +68,29 @@ def agent_for_bearer(session: Session, authorization: str | None) -> AgentContex
     return AgentContext(provider=provider, token=row)
 
 
+API_KEY_PREFIX = "syn_key_"
+
+
+def user_for_api_key(session: Session, authorization: str | None) -> User | None:
+    """The user behind `Authorization: Bearer syn_key_...` (the SDK), or None."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+    key = authorization[7:].strip()
+    if not key.startswith(API_KEY_PREFIX):
+        return None
+    row = session.exec(select(ApiKey).where(ApiKey.key_hash == token_hash(key))).first()
+    if row is None or row.revoked:
+        return None
+    row.last_used_at = utcnow()
+    session.add(row)
+    session.commit()
+    return session.get(User, row.user_id)
+
+
 def current_user(request: Request, session: Session = Depends(get_session)) -> User:
+    """Signed in with the session cookie (website) or a personal API key (SDK)."""
     cookie = request.cookies.get(request.app.state.settings.session_cookie)
-    user = user_for_cookie(session, cookie)
+    user = user_for_cookie(session, cookie) or user_for_api_key(session, request.headers.get("authorization"))
     if user is None:
         raise HTTPException(status_code=401, detail="Not signed in")
     return user

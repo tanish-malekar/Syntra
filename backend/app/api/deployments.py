@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
-from app.api.jobs import JobOut, job_out
+from app.api.jobs import JobOut, check_weight_bits, job_out
 from app.db import get_session, iso, utcnow
 from app.deps import current_user
 from app.models import BaseModel as BaseModelRow
@@ -24,6 +25,7 @@ class DeploymentIn(BaseModel):
     finetuned_model_id: int | None = None
     requested_gpus: int | None = Field(default=None, ge=1)  # None = automatic
     trusted_only: bool = False
+    weight_bits: Literal[16, 4] = 16  # 4 = serve with the weights compressed to 4-bit (about 3x less GPU memory)
 
 
 class DeploymentOut(BaseModel):
@@ -36,6 +38,7 @@ class DeploymentOut(BaseModel):
     num_gpus: int
     endpoint: str
     created_at: str
+    weight_bits: int
     job: JobOut
 
 
@@ -67,7 +70,8 @@ def deployment_out(session: Session, dep: Deployment) -> DeploymentOut:
     status = "queued" if job.status == "queued" and dep.status == "starting" else dep.status
     return DeploymentOut(id=dep.id, model_kind=dep.model_kind, model_name=model.name if model else base.name, base_model=base.name,
                          finetuned_model_id=dep.finetuned_model_id, status=status, num_gpus=dep.num_gpus, endpoint=dep.endpoint,
-                         created_at=iso(dep.created_at), job=job_out(session, job))
+                         created_at=iso(dep.created_at), weight_bits=int(json.loads(job.config_json or "{}").get("weight_bits", 16)),
+                         job=job_out(session, job))
 
 
 def owned_deployment(session: Session, dep_id: int, user: User) -> Deployment:
@@ -94,8 +98,9 @@ async def create_deployment(body: DeploymentIn, request: Request, user: User = D
     base = session.get(BaseModelRow, base_id)
     if body.requested_gpus is not None and body.requested_gpus > base.num_layers:
         raise HTTPException(422, f"requested_gpus cannot exceed the model's {base.num_layers} layers")
+    check_weight_bits(base, body.weight_bits)
     job = Job(owner_id=user.id, kind="deploy", status="queued", base_model_id=base_id, requested_gpus=body.requested_gpus,
-              trusted_only=body.trusted_only, config_json=json.dumps({"finetuned_model_id": tuned_id}))
+              trusted_only=body.trusted_only, config_json=json.dumps({"finetuned_model_id": tuned_id, "weight_bits": body.weight_bits}))
     session.add(job)
     session.commit()
     session.refresh(job)

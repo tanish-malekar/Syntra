@@ -230,3 +230,32 @@ def test_replacement_requires_enough_memory(w):
     job = w.job(owner, requested=2)
     leases = start(w, job)
     assert scheduler.lease_replacement(w.db, w.ev, job, leases[1], TIMEOUT) is None
+
+
+def test_4bit_jobs_only_use_gpus_whose_agent_supports_it_and_pack_more_layers(w):
+    owner = w.user(); prov = w.provider(w.user()); tok = w.machine(prov)
+    old = [w.gpu(prov, tok, "Apple M1", "mps", total=1300, index=i) for i in range(3)]
+    new = w.gpu(prov, w.machine(prov), "Apple M1", "mps", total=1300, index=0)
+    new.supports_4bit = True
+    w.db.add(new); w.db.commit()
+    job = w.job(owner)
+    job.config_json = '{"weight_bits": 4}'
+    w.db.add(job); w.db.commit()
+    assert [(l.gpu_id, l.layer_start, l.layer_end) for l in start(w, job)] == [(new.id, 0, 22)]
+    fp16 = w.job(owner)                       # the same GPUs in float16 need all three older laptops
+    assert {l.gpu_id for l in start(w, fp16)} == {g.id for g in old}
+
+
+def test_4bit_replacement_also_needs_a_4bit_capable_gpu(w):
+    owner = w.user(); prov = w.provider(w.user()); tok = w.machine(prov)
+    gpus = [w.gpu(prov, tok, "NVIDIA RTX A6000", "cuda", total=48000, index=i) for i in range(2)]
+    for g in gpus:
+        g.supports_4bit = True
+        w.db.add(g)
+    w.db.commit()
+    job = w.job(owner, requested=2)
+    job.config_json = '{"weight_bits": 4}'
+    w.db.add(job); w.db.commit()
+    leases = start(w, job)
+    w.gpu(prov, w.machine(prov), "NVIDIA RTX A6000", "cuda", total=48000, index=7)  # idle but its agent cannot do 4-bit
+    assert scheduler.lease_replacement(w.db, w.ev, job, leases[1], TIMEOUT) is None

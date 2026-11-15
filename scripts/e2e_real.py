@@ -3,6 +3,7 @@
   SCRATCH=<dir containing models/tinyllama>  BB_PYTHON=<python with BloomBee deps>  python scripts/e2e_real.py [stage]
 
 Stages: train (default)  |  full (train, kill + recover, deploy, compare)
+WEIGHT_BITS=4 trains with 4-bit base weights (QLoRA); DEPLOY_BITS=4 serves the tuned model in 4-bit (both default to 16).
 Everything runs as separate processes exactly as in production; only the 'providers' are simulated (3 virtual GPUs on this Mac).
 """
 from __future__ import annotations
@@ -25,6 +26,7 @@ BB_PYTHON = os.environ["BB_PYTHON"]
 BB_DIR = os.environ.get("BLOOMBEE_DIR", str(Path.home() / "Desktop/Repos/BloomBee"))
 STAGE = sys.argv[1] if len(sys.argv) > 1 else "train"
 STEPS = int(os.environ.get("STEPS", 14))
+WEIGHT_BITS = int(os.environ.get("WEIGHT_BITS", 16))
 PASSWORD = "correct horse battery"
 t0 = time.monotonic()
 procs: list[subprocess.Popen] = []
@@ -55,11 +57,10 @@ def cleanup():
         except Exception:
             pass
     time.sleep(2)
+    sys.path.insert(0, str(ROOT / "agent"))
+    from syntra_agent.workers import kill_process_group  # spares resource_tracker so semaphores are unlinked (macOS)
     for p in procs:
-        try:
-            os.killpg(p.pid, signal.SIGKILL)
-        except Exception:
-            pass
+        kill_process_group(p.pid)
 
 
 def wait(predicate, timeout, what):
@@ -85,7 +86,12 @@ def main():
           out=open(work / "backend.log", "w"), cwd=str(ROOT / "backend"))
     # seed (same db) before first use
     subprocess.run([backend_py, "-m", "app.seed"], env={**os.environ, **env}, cwd=str(ROOT / "backend"), capture_output=True, check=True)
-    wait(lambda: httpx.get(f"{url}/health", timeout=2).status_code == 200, 40, "backend up")
+    def healthy():
+        try:
+            return httpx.get(f"{url}/health", timeout=2).status_code == 200
+        except httpx.HTTPError:  # still starting
+            return False
+    wait(healthy, 40, "backend up")
     log("backend up", url=url, work=str(work))
 
     def new_user(name):
@@ -103,10 +109,11 @@ def main():
     pool = alice.get("/gpus").json()
     log("pool ready", gpus=[(g["name"], g["gpu_class"], g["total_memory_mb"]) for g in pool])
 
-    plan = alice.get("/plans", params={"base_model_id": 1, "requested_gpus": 2}).json()
+    plan = alice.get("/plans", params={"base_model_id": 1, "requested_gpus": 2, "weight_bits": WEIGHT_BITS}).json()
     log("plan preview", fits=plan["fits"], stages=[(s["gpu_name"], s["layer_start"], s["layer_end"]) for s in plan["stages"]], hourly=plan["hourly_rate"])
 
-    job = alice.post("/jobs", json={"base_model_id": 1, "dataset_id": 1, "requested_gpus": 2, "steps": STEPS, "batch_size": 2, "name": "Ticket classifier"}).json()
+    job = alice.post("/jobs", json={"base_model_id": 1, "dataset_id": 1, "requested_gpus": 2, "steps": STEPS, "batch_size": 2, "weight_bits": WEIGHT_BITS,
+                                    "name": "Ticket classifier"}).json()
     jid = job["id"]
     log("job created", id=jid, status=job["status"], leases=[(l["gpu_name"], l["layer_start"], l["layer_end"]) for l in job["leases"]])
 
@@ -147,7 +154,8 @@ def main():
     costs, earnings = alice.get("/ledger/costs").json(), provider.get("/ledger/earnings").json()
     log("billing", cost=costs["total"], earned=earnings["total"], entries=len(costs["entries"]))
     assert costs["total"] > 0 and abs(costs["total"] - earnings["total"]) < 1e-6
-    results.update(job=jid, model=models[0]["id"], steps=len(steps), first_loss=steps[0]["loss"], last_loss=steps[-1]["loss"])
+    results.update(job=jid, model=models[0]["id"], steps=len(steps), first_loss=steps[0]["loss"], last_loss=steps[-1]["loss"],
+                   weight_bits=WEIGHT_BITS, step_seconds=sorted(s["step_seconds"] for s in steps)[len(steps) // 2])
     results["work"] = str(work)
 
     if STAGE == "full":

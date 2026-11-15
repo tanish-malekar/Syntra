@@ -18,7 +18,7 @@ from app.main import create_app
 from app.db import utcnow
 from app.models import Gpu, Job, Lease, User
 from app.seed import seed_reference_data
-from syntra_agent.client import Agent, AgentSettings
+from syntra_agent.client import Agent, AgentRevoked, AgentSettings
 from syntra_agent.hardware import GpuInfo
 from syntra_agent.workers import AgentConfig, WorkerManager
 
@@ -227,9 +227,9 @@ def test_revoked_token_stops_the_agent_with_an_auth_error(tmp_path):
         await platform.start()
         await platform.user.delete(f"/providers/{platform.provider_id}/agent-tokens/{platform.token_id}")
         agent = make_agent(platform, FakeHardware(), tmp_path)
-        with pytest.raises(httpx.HTTPStatusError) as err:
+        with pytest.raises(AgentRevoked):
             await asyncio.wait_for(agent.run(), 10)
-        assert err.value.response.status_code == 401
+        assert agent.state == "revoked" and "revoked" in agent.last_error
         assert platform.gpus() == []
         await platform.stop()
     asyncio.run(scenario())
@@ -265,7 +265,7 @@ def test_closing_the_lid_reports_offline_and_kills_workers_at_once(tmp_path):
         platform.app.state.agent_hub.add_listener(lambda token_id, msg: events.append(msg))
         run = asyncio.create_task(agent.run())
         try:
-            await wait_for(lambda: len(platform.gpus()) == 2, what="registered")
+            await wait_for(lambda: len(platform.gpus()) == 2 and agent.connected.is_set(), what="registered and connected")
             hub = platform.app.state.agent_hub
             assert (await hub.request(platform.token_id, start_cmd("w1")))["ok"]
             await wait_for(lambda: any(e["type"] == "worker.online" for e in events), what="worker online")
@@ -318,5 +318,145 @@ def test_a_relayed_agent_gets_its_ports_and_traffic_flows_through_the_platform_c
             await asyncio.wait_for(run, 10)
             await wait_for(lambda: not platform.app.state.relay_hub.agents, what="relay detached")
             echo_server.close()
+            await platform.stop()
+    asyncio.run(scenario())
+
+
+async def control_call(agent: Agent, method: str, path: str, body: dict | None = None, secret: str | None = None):
+    async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{agent.control.port}") as c:
+        return await c.request(method, path, json=body, headers={"X-Syntra-Secret": secret or agent.control.secret})
+
+
+def test_control_api_pause_drain_resume_and_quit(tmp_path):
+    async def scenario():
+        platform = Platform()
+        await platform.start()
+        agent = make_agent(platform, FakeHardware(), tmp_path, control=True, state_dir=tmp_path / "state")
+        run = asyncio.create_task(agent.run())
+        hub = platform.app.state.agent_hub
+        try:
+            await wait_for(lambda: agent.state == "connected" and agent.connected.is_set(), what="connected")
+            info = __import__("json").loads((tmp_path / "state" / "agent.json").read_text())
+            assert info["port"] == agent.control.port and info["secret"] == agent.control.secret
+            assert (await control_call(agent, "GET", "/status", secret="wrong")).status_code == 401
+            st = (await control_call(agent, "GET", "/status")).json()
+            assert st["state"] == "connected" and [g["status"] for g in st["gpus"]] == ["idle", "idle"]
+
+            # a job is running on GPU 0; pause with drain keeps it there and takes GPU 1 out of the pool
+            assert (await hub.request(platform.token_id, start_cmd("w1")))["ok"]
+            st = (await control_call(agent, "POST", "/pause", {"mode": "drain"})).json()
+            assert st["paused"] and st["draining"] and [g["status"] for g in st["gpus"]] == ["leased", "offline"]
+            # the platform's lease table (not the agent) decides "leased"; this test has no lease, so GPU 0 stays idle there
+            await wait_for(lambda: [g.status for g in platform.gpus()] == ["idle", "offline"], what="platform sees drain")
+            with pytest.raises(AgentCommandError, match="paused"):
+                await hub.request(platform.token_id, start_cmd("w2", device_index=1))
+
+            # pause now stops the running work; resume brings both GPUs back
+            st = (await control_call(agent, "POST", "/pause", {"mode": "now"})).json()
+            await wait_for(lambda: not agent.manager.describe(), what="workers stopped")
+            await wait_for(lambda: [g.status for g in platform.gpus()] == ["offline", "offline"], what="offline")
+            assert (await control_call(agent, "POST", "/pause", {"mode": "later"})).status_code == 400
+            st = (await control_call(agent, "POST", "/resume")).json()
+            assert not st["paused"] and st["state"] == "connected"
+            await wait_for(lambda: [g.status for g in platform.gpus()] == ["idle", "idle"], what="idle again")
+
+            # quit: offline at once, agent exits, control info removed
+            st = (await control_call(agent, "POST", "/quit")).json()
+            assert st["state"] == "stopped"
+            await asyncio.wait_for(run, 5)
+            assert [g.status for g in platform.gpus()] == ["offline", "offline"]
+            assert not (tmp_path / "state" / "agent.json").exists()
+        finally:
+            agent.stop()
+            await asyncio.gather(run, return_exceptions=True)
+            await platform.stop()
+    asyncio.run(scenario())
+
+
+def test_token_revoked_while_running_stops_the_agent(tmp_path):
+    async def scenario():
+        platform = Platform()
+        await platform.start()
+        agent = make_agent(platform, FakeHardware(), tmp_path)
+        run = asyncio.create_task(agent.run())
+        try:
+            await wait_for(lambda: agent.state == "connected", what="connected")
+            await platform.user.delete(f"/providers/{platform.provider_id}/agent-tokens/{platform.token_id}")
+            await asyncio.wait_for(run, 5)
+            assert agent.state == "revoked"
+        finally:
+            agent.stop()
+            await asyncio.gather(run, return_exceptions=True)
+            await platform.stop()
+    asyncio.run(scenario())
+
+
+def test_instance_lock_allows_one_agent_and_takes_over_a_stale_lock(tmp_path):
+    from syntra_agent.control import AlreadyRunning, InstanceLock
+    lock = InstanceLock(tmp_path)
+    lock.acquire()
+    (tmp_path / "agent.lock").write_text("1")          # pid 1 (launchd) is alive: a live other agent
+    with pytest.raises(AlreadyRunning):
+        InstanceLock(tmp_path).acquire()
+    (tmp_path / "agent.lock").write_text("999999")     # no such process: stale, taken over
+    InstanceLock(tmp_path).acquire()
+    assert (tmp_path / "agent.lock").read_text() == str(__import__("os").getpid())
+
+
+def test_app_pairing_and_machine_usage(tmp_path):
+    async def scenario():
+        platform = Platform()
+        await platform.start()
+        anon = httpx.AsyncClient(base_url=platform.url)
+        try:
+            bad = await anon.post("/app/pair", json={"email": "owner@example.com", "password": "nope", "machine_id": "mac-uuid-1"})
+            assert bad.status_code == 401
+            first = (await anon.post("/app/pair", json={"email": "owner@example.com", "password": PASSWORD,
+                                                       "machine_id": "mac-uuid-1", "machine_name": "Ryan's MacBook"})).json()
+            assert first["provider_id"] == platform.provider_id      # reuses the existing provider profile
+            again = (await anon.post("/app/pair", json={"email": "owner@example.com", "password": PASSWORD,
+                                                       "machine_id": "mac-uuid-1", "machine_name": "Ryan's MacBook"})).json()
+            old = httpx.AsyncClient(base_url=platform.url, headers={"Authorization": f"Bearer {first['token']}"})
+            new = httpx.AsyncClient(base_url=platform.url, headers={"Authorization": f"Bearer {again['token']}"})
+            assert (await old.get("/agent/me")).status_code == 401  # re-pairing the same machine revoked the old token
+            assert (await new.get("/agent/me")).status_code == 200
+
+            platform.token = again["token"]
+            agent = make_agent(platform, FakeHardware(), tmp_path)
+            run = asyncio.create_task(agent.run())
+            await wait_for(lambda: len(platform.gpus()) == 2, what="GPUs registered")
+            usage = (await new.get("/agent/usage")).json()
+            assert usage["machine"] == "Ryan's MacBook" and len(usage["gpus"]) == 2
+            assert usage["machine_total"]["gpu_seconds_total"] == 0 and not usage["machine_total"]["in_use"]
+
+            # a lease runs on GPU 0 for a while: live estimate, then billed when it ends
+            from datetime import timedelta
+            from app.services import scheduler
+            with Session(platform.app.state.engine) as s:
+                user = s.exec(select(User)).first()
+                gpu = s.exec(select(Gpu).order_by(Gpu.id)).first()
+                job = Job(owner_id=user.id, kind="train", base_model_id=1)
+                s.add(job); s.commit(); s.refresh(job)
+                lease = Lease(job_id=job.id, gpu_id=gpu.id, layer_start=0, layer_end=22, started_at=utcnow() - timedelta(hours=1))
+                s.add(lease); s.commit(); s.refresh(lease)
+            usage = (await new.get("/agent/usage")).json()
+            g0 = usage["gpus"][0]
+            assert g0["in_use"] and g0["current"]["job_kind"] == "train" and 3590 < g0["gpu_seconds_running"] < 3700
+            assert g0["earned_running_estimate"] == pytest.approx(g0["price_per_hour"], rel=0.05) and g0["earned_settled"] == 0
+            with Session(platform.app.state.engine) as s:
+                scheduler.release_lease(s, platform.app.state.events, s.get(Lease, lease.id), "completed")
+            usage = (await new.get("/agent/usage")).json()
+            g0 = usage["gpus"][0]
+            assert not g0["in_use"] and g0["earned_running_estimate"] == 0
+            assert g0["earned_settled"] == pytest.approx(g0["price_per_hour"], rel=0.05) and g0["jobs_served"] == 1
+            assert usage["account_earned_settled"] == pytest.approx(g0["earned_settled"])
+            assert len(g0["last_days"]) == 1 and g0["gpu_seconds_today"] > 0
+
+            assert (await new.post("/agent/unpair")).status_code == 204
+            await asyncio.wait_for(run, 5)                       # the agent notices and stops
+            assert agent.state == "revoked"
+            await old.aclose(); await new.aclose()
+        finally:
+            await anon.aclose()
             await platform.stop()
     asyncio.run(scenario())

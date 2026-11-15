@@ -9,8 +9,7 @@ Things we decided to do later, parked ideas, and known open issues. Finished ite
 - [ ] Sampling controls on the Deploy page and playground (temperature, top-p, top-k, max tokens, seed).
       Base-vs-fine-tuned comparison stays greedy or uses a fixed seed. Held-out evaluation stays greedy.
 
-- [~] Full fine-tuning (all weights): built by Rohan as DiLoCo data-parallel replicas on branch
-      `feature/qlora-rl-diloco-app` (not merged into `main` yet). Still open:
+- [~] Full fine-tuning (all weights): built as DiLoCo data-parallel replicas (ROADMAP.md stage 4). Still open:
   - [ ] A real-size run (Qwen2.5-0.5B on context3, needs GPU approval) and bf16 replicas on CUDA.
   - [ ] Models that do not fit on one GPU (sharding / pipeline + replicas, e.g. replicated stages with peer state transfer).
 
@@ -58,13 +57,22 @@ Things we decided to do later, parked ideas, and known open issues. Finished ite
         trust the "first step / generation resumed" times instead.
   - [ ] Lid-close takeover across networks: MacBook B closes its lid and an idle context3 GPU (joined through the relay)
         takes over. The pieces ran separately in the live run; the takeover itself was never completed.
-- [~] QLoRA / 4-bit: built by Rohan (BloomBee branch `qlora-4bit`, Syntra branch `feature/qlora-rl-diloco-app`; neither
-      merged yet). Still open: a real end-to-end run, 4-bit serving on real hardware, accuracy vs FP16 LoRA, a CUDA check,
-      and pointing `join.sh` at the `qlora-4bit` branch.
+- [~] QLoRA / 4-bit: built (BloomBee `--compress_weight`, now on `mac-mps-ft`). Still open: a real end-to-end run
+      (`WEIGHT_BITS=4 DEPLOY_BITS=4 scripts/e2e_real.py full`), 4-bit serving on real hardware, accuracy vs FP16 LoRA
+      (48/48), and a CUDA check on an idle context3 GPU.
+- [ ] RL service real run: `scripts/e2e_rl.py` (GRPO through the SDK + managed DPO on TinyLlama) has not run on real GPUs.
+- [ ] Provider app: manual click-through of the macOS app (built and unit-tested).
 - [ ] Bigger models (7B+): split-across-GPUs proof run (not done; needs more memory than this Mac comfortably has).
 - [~] Memory and step time on the Mac (TinyLlama-1.1B, batch 2, seq 128): worker process RSS about 0.6 GB (first
       stage), 1.0 GB (last stage) with 2-3 stages; step time about 1 s with 2 stages and 1-2.5 s with 3 stages.
       RSS likely understates GPU memory; not measured with a GPU profiler.
+- [ ] macOS leaked semaphores (found 2026-11-14): with the spawn start method every multiprocessing lock is a NAMED POSIX semaphore
+      until Python's resource_tracker unlinks it. SIGKILLing a worker's whole process group killed the tracker too, so each
+      killed BloomBee worker leaked names until reboot; after ~10,000 (kern.posix.sem.max) no Python program on the Mac can
+      create a lock ("OSError: [Errno 28] No space left on device"). Fixed in the agent, swarm runner and e2e_real
+      (kill the group but spare `multiprocessing.resource_tracker`); a Mac that hit it still needs one reboot to clear the old leaks.
+- [ ] Pre-existing flaky test: tests/test_deployments_e2e.py::test_train_then_come_back_later_deploy_compare_and_evaluate
+      (2/8 failures on main: the 1-GPU base deployment sometimes reports 2 GPUs).
 - [ ] Remaining hard-coded CUDA spots (about 40, mostly cache offload, speculative decoding, Falcon); none on the
       tested path.
 - [ ] Trust and privacy for shared GPUs: owners see the data. Use public/synthetic data, "Trusted GPUs only"
@@ -94,8 +102,6 @@ Things we decided to do later, parked ideas, and known open issues. Finished ite
       scaled-down run (2-5k examples, 200 eval problems) at 6-15 h. Not run.
 
 ## Housekeeping
-- [ ] Merge Rohan's branches (Syntra `feature/qlora-rl-diloco-app`, BloomBee `qlora-4bit`) once reviewed; this file will
-      conflict with his copy of it and needs a hand merge.
 - [ ] Decide what `hackathon` should contain (it currently equals upstream `main`; fault-tolerance and Mac
       support live on `mac-mps-ft`).
 - [ ] Rebase `mac-mps-ft` onto upstream `main` when it moves; consider upstream PRs for MPS support and
@@ -137,6 +143,11 @@ Things we decided to do later, parked ideas, and known open issues. Finished ite
   `join.sh`, trained 12 steps with this Mac through the relay (layers 0-15 M4 Pro, 15-22 M4, about 2.6 s/step), and a
   context3 GPU joined as a spare through the relay. Fixed on the way: lost worker events on reconnect, WebSocket keep-alive
   deadlock, DHT expiry too short over the relay (relay agents use 10 s / 120 s). The install script pins Python 3.12.
-- 2026-11-14: Rohan built QLoRA, the macOS provider app, the RL service (DPO, sessions API, `syntra` SDK with GRPO/PPO/DPO)
-  and DiLoCo full fine-tuning on branches (see Housekeeping). AWS CLI set up; spot blocked on the account (see Platform).
+- 2026-11-14: QLoRA (4-bit base) built and measured (TinyLlama, 2 workers: same loss curve as FP16, ~360 MB vs ~1150 MB GPU
+  memory per worker during training, steps ~2x slower); provider desktop app (ROADMAP.md stage 2); leaked-semaphore fix; a worker
+  that crashes while starting is now killed and reported (`failed_to_start`) instead of hanging its job.
+- 2026-11-14: Stage 3 (RL: managed DPO, sessions API, `syntra` SDK with GRPO/PPO/DPO) and Stage 4 (DiLoCo full fine-tuning,
+  real local run passed: loss 9.04 -> 0.90, killed replica replaced in 4.6 s) built. AWS CLI set up; spot blocked on the
+  account (see Platform).
+- 2026-11-14: Rohan's branch `feature/qlora-rl-diloco-app` merged into `main`; BloomBee `qlora-4bit` merged into `mac-mps-ft`.
 - 2026-11-14: finished items removed from this file; their record is this changelog.

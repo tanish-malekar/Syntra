@@ -1,11 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, type BaseModel, type Dataset, type Plan } from "../api";
+import { api, type BaseModel, type Dataset, type Model, type Plan, type WeightBits } from "../api";
 import { ErrorBox } from "../components/ui";
 import { layersLabel, mb, money } from "../format";
 import { useOnEvent } from "../state";
 
 const PALETTE = ["#2459d6", "#14804a", "#b4690e", "#8b3fb8", "#c1272d", "#0b7a85"];
+
+/** Float16 or 4-bit base weights on the workers. Used for training (QLoRA) and for deployments. */
+export function WeightBitsField({ value, onChange, name, purpose }: { value: WeightBits; onChange: (v: WeightBits) => void; name: string; purpose: "train" | "deploy" }) {
+  return (
+    <div className="field">
+      <span className="label">Base model weights</span>
+      <label><input type="radio" name={name} checked={value === 16} onChange={() => onChange(16)} /> Full precision (float16)</label>
+      <label><input type="radio" name={name} checked={value === 4} onChange={() => onChange(4)} /> 4-bit{purpose === "train" ? " (QLoRA)" : ""}</label>
+      <div className="hint">
+        {purpose === "train"
+          ? "4-bit keeps the frozen model in about a third of the GPU memory, so it fits on fewer or smaller GPUs. Steps are slower and results can be slightly less accurate. Only GPUs whose agent supports 4-bit are used."
+          : "4-bit serves the model in about a third of the GPU memory; answers can differ slightly from float16."}
+      </div>
+    </div>
+  );
+}
 
 export function PlanView({ plan, requested }: { plan: Plan; requested: number | null }) {
   if (!plan.fits) {
@@ -55,6 +71,12 @@ export default function TrainPage() {
   const [gpuCount, setGpuCount] = useState(2);
   const [trustedOnly, setTrustedOnly] = useState(false);
   const [steps, setSteps] = useState(60);
+  const [weightBits, setWeightBits] = useState<WeightBits>(16);
+  const [method, setMethod] = useState<"sft" | "dpo" | "diloco">("sft");
+  const [innerSteps, setInnerSteps] = useState(20);
+  const [beta, setBeta] = useState(0.1);
+  const [myModels, setMyModels] = useState<Model[]>([]);
+  const [initModel, setInitModel] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [plan, setPlan] = useState<Plan | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -64,16 +86,25 @@ export default function TrainPage() {
 
   useEffect(() => {
     api.baseModels().then((m) => { setModels(m); setBaseId(m[0]?.id ?? null); }).catch((e) => setError(e.message));
-    api.datasets().then((d) => { setDatasets(d); setDatasetId(d[0]?.id ?? null); }).catch((e) => setError(e.message));
+    api.datasets().then((d) => { setDatasets(d); setDatasetId(d.find((x) => x.format === "text")?.id ?? null); }).catch((e) => setError(e.message));
+    api.models().then(setMyModels).catch(() => undefined);
   }, []);
+  const wantFormat = method === "dpo" ? "preference" : "text";
+  const usable = datasets.filter((d) => (d.format ?? "text") === wantFormat);
+  const startFrom = myModels.filter((m) => m.base_model_id === baseId);
+  const chooseMethod = (m: "sft" | "dpo" | "diloco") => {
+    setMethod(m);
+    if (m === "diloco") { setWeightBits(16); setInitModel(null); }
+    setDatasetId(datasets.find((d) => (d.format ?? "text") === (m === "dpo" ? "preference" : "text"))?.id ?? null);
+  };
 
   const base = models.find((m) => m.id === baseId) ?? null;
   const requested = auto ? null : gpuCount;
   const refresh = () => {
     if (baseId === null) return;
-    api.plan(baseId, requested, trustedOnly).then((p) => { setPlan(p); setError(null); }).catch((e) => { setPlan(null); setError(e.message); });
+    api.plan(baseId, method === "diloco" ? (requested ?? 1) : requested, trustedOnly, weightBits, method).then((p) => { setPlan(p); setError(null); }).catch((e) => { setPlan(null); setError(e.message); });
   };
-  useEffect(() => { const t = setTimeout(refresh, 250); return () => clearTimeout(t); }, [baseId, requested, trustedOnly]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const t = setTimeout(refresh, 250); return () => clearTimeout(t); }, [baseId, requested, trustedOnly, weightBits, method]); // eslint-disable-line react-hooks/exhaustive-deps
   useOnEvent((e) => { if (e.type === "gpu.registered" || e.type === "gpu.offline" || e.type === "gpu.busy_external" || e.type === "lease.created") refresh(); });
 
   const upload = async () => {
@@ -93,7 +124,9 @@ export default function TrainPage() {
     if (baseId === null || datasetId === null) return;
     setBusy(true); setError(null);
     try {
-      const job = await api.createJob({ base_model_id: baseId, dataset_id: datasetId, requested_gpus: requested, trusted_only: trustedOnly, steps, name: name.trim() || undefined });
+      const job = await api.createJob({ base_model_id: baseId, dataset_id: datasetId, requested_gpus: requested, trusted_only: trustedOnly, steps, weight_bits: weightBits, name: name.trim() || undefined,
+        method, beta, init_model_id: method === "diloco" ? null : initModel,
+        ...(method === "diloco" ? { inner_steps: innerSteps, lr: 1e-5, requested_gpus: requested ?? 1 } : {}) });
       nav(`/runs/${job.id}`);
     } catch (e) { setError((e as Error).message); setBusy(false); }
   };
@@ -117,9 +150,12 @@ export default function TrainPage() {
           <div className="field">
             <label htmlFor="data">Training data</label>
             <select id="data" value={datasetId ?? ""} onChange={(e) => setDatasetId(Number(e.target.value))}>
-              {datasets.map((d) => <option key={d.id} value={d.id}>{d.name} ({d.num_rows} examples{d.has_heldout ? ", has held-out set" : ""})</option>)}
+              {usable.length === 0 && <option value="">No {wantFormat} dataset yet: upload one below</option>}
+              {usable.map((d) => <option key={d.id} value={d.id}>{d.name} ({d.num_rows} examples{d.has_heldout ? ", has held-out set" : ""})</option>)}
             </select>
-            <div className="hint">A .jsonl file with one {"{"}"text": "…"{"}"} per line. The demo set teaches support-ticket routing as JSON.</div>
+            <div className="hint">{method === "dpo"
+              ? <>A .jsonl file with {"{"}"prompt", "chosen", "rejected"{"}"} per line: the model learns to prefer the chosen answer.</>
+              : <>A .jsonl file with one {"{"}"text": "…"{"}"} per line. The demo set teaches support-ticket routing as JSON.</>}</div>
           </div>
           <details>
             <summary className="small">Upload your own dataset</summary>
@@ -129,6 +165,35 @@ export default function TrainPage() {
               <button onClick={upload}>Upload</button>
             </div>
           </details>
+          <div className="field">
+            <span className="label">Training method</span>
+            <label><input type="radio" name="method" checked={method === "sft"} onChange={() => chooseMethod("sft")} /> Supervised (learn from examples)</label>
+            <label><input type="radio" name="method" checked={method === "dpo"} onChange={() => chooseMethod("dpo")} /> Preference tuning, DPO (learn which answer is better)</label>
+            <label><input type="radio" name="method" checked={method === "diloco"} onChange={() => chooseMethod("diloco")} /> Full fine-tuning, DiLoCo (every weight; each GPU holds the whole model)</label>
+            {method === "diloco" && (
+              <div className="row" style={{ marginTop: 6 }}>
+                <label htmlFor="inner" style={{ margin: 0 }}>Sync every</label>
+                <input id="inner" type="number" min={1} max={1000} value={innerSteps} onChange={(e) => setInnerSteps(Number(e.target.value))} style={{ width: 80 }} />
+                <span className="hint" style={{ margin: 0 }}>local steps. "Use exactly N GPUs" = N replicas, each training on its share of the data.</span>
+              </div>
+            )}
+            {method === "dpo" && (
+              <div className="row" style={{ marginTop: 6 }}>
+                <label htmlFor="beta" style={{ margin: 0 }}>Beta</label>
+                <input id="beta" type="number" step="0.05" min={0.01} max={5} value={beta} onChange={(e) => setBeta(Number(e.target.value))} style={{ width: 90 }} />
+                <span className="hint" style={{ margin: 0 }}>higher = stay closer to the starting model</span>
+              </div>
+            )}
+            <div className="hint">For RL with your own reward (GRPO, PPO), use the Python SDK: see Developers.</div>
+          </div>
+          {method !== "diloco" && <div className="field">
+            <label htmlFor="init">Start from</label>
+            <select id="init" value={initModel ?? ""} onChange={(e) => setInitModel(e.target.value ? Number(e.target.value) : null)}>
+              <option value="">The base model</option>
+              {startFrom.map((m) => <option key={m.id} value={m.id}>My model: {m.name}</option>)}
+            </select>
+            {method === "dpo" && <div className="hint">Recommended: start DPO from a model you fine-tuned with supervised training first.</div>}
+          </div>}
           <div className="grid cols-2">
             <div className="field"><label htmlFor="steps">Training steps</label><input id="steps" type="number" min={1} max={500} value={steps} onChange={(e) => setSteps(Number(e.target.value))} /></div>
             <div className="field"><label htmlFor="name">Name your model</label><input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Support ticket router" /></div>
@@ -143,6 +208,7 @@ export default function TrainPage() {
           </div>
           <label><input type="checkbox" checked={trustedOnly} onChange={(e) => setTrustedOnly(e.target.checked)} /> Trusted GPUs only (verified providers)</label>
           <div className="hint">Providers can see the data their GPUs process. Use this for anything sensitive.</div>
+          {method !== "diloco" && <WeightBitsField value={weightBits} onChange={setWeightBits} name="train-bits" purpose="train" />}
         </div>
       </div>
       <div className="card stack">

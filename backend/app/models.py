@@ -54,6 +54,7 @@ class AgentToken(SQLModel, table=True):
     provider_id: int = Field(foreign_key="provider.id", index=True)
     token_hash: str = Field(index=True, unique=True)
     label: str = ""
+    machine_id: str = Field(default="", index=True)  # set when paired from the desktop app: one live token per machine
     created_at: datetime = Field(default_factory=utcnow)
     last_used_at: Optional[datetime] = None
     revoked: bool = False
@@ -64,6 +65,18 @@ class GpuClass(SQLModel, table=True):
     name: str = Field(index=True, unique=True)
     price_per_hour: float  # simulated currency per GPU-hour
     device_hint: str = ""  # mps | cuda
+
+
+class ApiKey(SQLModel, table=True):
+    """Personal API key for the SDK (`Authorization: Bearer syn_key_...`); plaintext shown once, only the hash is kept."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    key_hash: str = Field(index=True, unique=True)
+    label: str = ""
+    created_at: datetime = Field(default_factory=utcnow)
+    last_used_at: Optional[datetime] = None
+    revoked: bool = False
 
 
 class Gpu(SQLModel, table=True):
@@ -81,6 +94,7 @@ class Gpu(SQLModel, table=True):
     last_heartbeat: Optional[datetime] = None
     reliability: float = 1.0
     simulated: bool = False
+    supports_4bit: bool = False  # the agent's BloomBee can keep base weights in 4-bit (--compress_weight)
     created_at: datetime = Field(default_factory=utcnow)
 
 
@@ -106,6 +120,7 @@ class Dataset(SQLModel, table=True):
     heldout_path: str = ""
     num_rows: int = 0
     builtin: bool = False
+    format: str = "text"  # text: {"text"} per line (SFT) | preference: {"prompt", "chosen", "rejected"} per line (DPO)
     created_at: datetime = Field(default_factory=utcnow)
 
 

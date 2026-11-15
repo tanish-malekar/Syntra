@@ -21,10 +21,13 @@ export type EventType =
   | "deploy.online"
   | "deploy.stopped"
   | "eval.result"
-  | "ledger.credit";
+  | "ledger.credit"
+  | "session.ready"
+  | "session.saved"
+  | "session.closed";
 
 export type GpuStatus = "idle" | "leased" | "busy_external" | "offline";
-export type WorkerDownReason = "exited" | "heartbeat_timeout" | "killed_by_user";
+export type WorkerDownReason = "exited" | "heartbeat_timeout" | "killed_by_user" | "failed_to_start";
 
 export interface EventPayloads {
   "gpu.registered": { name: string; device: "mps" | "cuda"; gpu_class: string; total_memory_mb: number; provider: string; new?: boolean };
@@ -35,13 +38,13 @@ export interface EventPayloads {
   "lease.created": { layer_start: number; layer_end: number; gpu_name: string };
   "worker.starting": { layer_start: number; layer_end: number };
   "worker.online": { layer_start: number; layer_end: number; peer_id: string };
-  "worker.down": { reason: WorkerDownReason; layer_start: number; layer_end: number };
+  "worker.down": { reason: WorkerDownReason; layer_start: number; layer_end: number; detail?: string };
   "worker.replacement_waiting": { layer_start: number; layer_end: number };
   "worker.replacement_starting": {
     layer_start: number; layer_end: number; gpu_name: string; gpu_device: "mps" | "cuda"; gpu_class: string; gpu_memory_mb: number;
   };
   "worker.replacement_online": { layer_start: number; layer_end: number; peer_id: string; seconds_since_down: number };
-  "train.step": { step: number; loss: number; grad_norm: number; step_seconds: number };
+  "train.step": { step: number; loss: number; grad_norm: number; step_seconds: number; reward_margin?: number; reward_accuracy?: number };
   "train.completed": { model_id: number };
   "train.failed": { error: string };
   "deploy.merging": Record<string, never>;
@@ -49,6 +52,9 @@ export interface EventPayloads {
   "deploy.stopped": { reason: string };
   "eval.result": { model_label: string; n: number; valid_json: number; dept_correct: number; urgency_correct: number };
   "ledger.credit": { provider_id: number; amount: number; gpu_seconds: number };
+  "session.ready": { trainable_parameters: number };
+  "session.saved": { model_id: number; name: string; step?: number };
+  "session.closed": { reason: string };
 }
 
 export interface SyntraEvent<T extends EventType = EventType> {

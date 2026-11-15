@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import uuid
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
@@ -28,12 +29,13 @@ class DatasetOut(BaseModel):
     num_rows: int
     builtin: bool
     has_heldout: bool
+    format: str  # text (SFT) | preference (DPO)
     created_at: str
 
 
 def dataset_out(d: Dataset) -> DatasetOut:
     return DatasetOut(id=d.id, name=d.name, num_rows=d.num_rows, builtin=d.builtin, has_heldout=bool(d.heldout_path),
-                      created_at=iso(d.created_at))
+                      format=d.format or "text", created_at=iso(d.created_at))
 
 
 def visible_dataset(session: Session, dataset_id: int, user: User) -> Dataset:
@@ -49,22 +51,40 @@ def list_datasets(user: User = Depends(current_user), session: Session = Depends
     return [dataset_out(d) for d in rows]
 
 
-def validate_jsonl(raw: bytes) -> list[str]:
-    """Each non-empty line must be a JSON object with a non-empty string field "text"."""
+PREFERENCE_FIELDS = ("prompt", "chosen", "rejected")
+
+
+def validate_jsonl(raw: bytes) -> tuple[list[str], str]:
+    """Every non-empty line is a JSON object of one format, detected from the first line:
+    text ({"text": ...}, for supervised fine-tuning) or preference ({"prompt", "chosen", "rejected"}, for DPO)."""
     try:
         lines = [l for l in raw.decode("utf-8").splitlines() if l.strip()]
     except UnicodeDecodeError:
         raise HTTPException(422, "The file is not valid UTF-8 text")
     if len(lines) < 8:
         raise HTTPException(422, "A dataset needs at least 8 examples")
+    fmt = None
     for i, line in enumerate(lines, 1):
         try:
             record = json.loads(line)
         except ValueError:
             raise HTTPException(422, f"Line {i} is not valid JSON")
-        if not isinstance(record, dict) or not isinstance(record.get("text"), str) or not record["text"].strip():
-            raise HTTPException(422, f'Line {i} must be an object with a non-empty string field "text"')
-    return lines
+        if not isinstance(record, dict):
+            raise HTTPException(422, f"Line {i} must be a JSON object")
+        if fmt is None:
+            fmt = "preference" if all(k in record for k in PREFERENCE_FIELDS) else "text"
+        if fmt == "text":
+            if not isinstance(record.get("text"), str) or not record["text"].strip():
+                raise HTTPException(422, f'Line {i} must be an object with a non-empty string field "text" '
+                                         f'(or, for preference data, "prompt", "chosen" and "rejected" on every line)')
+        else:
+            bad = [k for k in PREFERENCE_FIELDS if not isinstance(record.get(k), str) or not record[k].strip()]
+            if bad:
+                raise HTTPException(422, f"Line {i}: preference data needs non-empty strings {', '.join(PREFERENCE_FIELDS)} "
+                                         f"(missing or empty: {', '.join(bad)})")
+            if record["chosen"] == record["rejected"]:
+                raise HTTPException(422, f'Line {i}: "chosen" and "rejected" are identical (no preference to learn)')
+    return lines, fmt or "text"
 
 
 @router.post("/datasets", response_model=DatasetOut, status_code=201)
@@ -73,12 +93,12 @@ async def upload_dataset(request: Request, name: str = Form(...), file: UploadFi
     raw = await file.read(MAX_DATASET_BYTES + 1)
     if len(raw) > MAX_DATASET_BYTES:
         raise HTTPException(413, "Dataset is larger than 10 MB")
-    lines = validate_jsonl(raw)
+    lines, fmt = validate_jsonl(raw)
     folder = Path(request.app.state.settings.datasets_dir).expanduser() / str(user.id)
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{uuid.uuid4().hex}.jsonl"
     path.write_text("\n".join(lines) + "\n")
-    d = Dataset(owner_id=user.id, name=name.strip()[:80] or "Untitled dataset", path=str(path), num_rows=len(lines))
+    d = Dataset(owner_id=user.id, name=name.strip()[:80] or "Untitled dataset", path=str(path), num_rows=len(lines), format=fmt)
     session.add(d)
     session.commit()
     session.refresh(d)
@@ -110,19 +130,25 @@ class PlanOut(BaseModel):
     num_layers: int = 0
 
 
-def build_plan(request: Request, session: Session, base_model_id: int, requested_gpus: int | None, trusted_only: bool) -> PlanOut:
+def build_plan(request: Request, session: Session, base_model_id: int, requested_gpus: int | None, trusted_only: bool,
+               weight_bits: int = 16, method: str = "sft") -> PlanOut:
     base = session.get(BaseModelRow, base_model_id)
     if base is None:
         raise HTTPException(404, "Base model not found")
     timeout = request.app.state.settings.heartbeat_timeout_seconds
-    eligible = scheduler.eligible_gpus(session, timeout, trusted_only)
-    spec = scheduler.model_spec(base)
+    eligible = scheduler.eligible_gpus(session, timeout, trusted_only, need_4bit=weight_bits == 4)
+    spec = scheduler.model_spec(base, weight_bits)
+    if method == "diloco":
+        spec = scheduler.model_spec(base, full_ft=True)
     try:
-        plan = planner.make_plan(spec, [e.candidate() for e in eligible], requested_gpus)
+        plan = (planner.make_replica_plan(spec, [e.candidate() for e in eligible], requested_gpus or 1) if method == "diloco"
+                else planner.make_plan(spec, [e.candidate() for e in eligible], requested_gpus))
     except ValueError as exc:
         raise HTTPException(422, str(exc))
     if plan is None:
         why = (f"Not enough idle GPUs for {requested_gpus} stages" if requested_gpus else "No set of idle GPUs can hold this model")
+        if weight_bits == 4:
+            why += " (4-bit needs GPUs whose agent supports it)"
         return PlanOut(fits=False, reason=why + " right now; the run would wait in the queue.", idle_gpus=len(eligible),
                        num_layers=base.num_layers)
     by_id = {e.gpu.id: e for e in eligible}
@@ -131,17 +157,29 @@ def build_plan(request: Request, session: Session, base_model_id: int, requested
         e = by_id[st.gpu_id]
         stages.append(StageOut(gpu_id=e.gpu.id, gpu_name=e.gpu.name, gpu_class=e.gpu_class.name, device=e.gpu.device,
                                provider=e.provider.name, region=e.gpu.region, layer_start=st.layer_start, layer_end=st.layer_end,
-                               memory_needed_mb=planner.stage_memory_mb(spec, st.layers), free_memory_mb=e.gpu.free_memory_mb,
+                               memory_needed_mb=planner.stage_memory_mb(spec, base.num_layers if method == "diloco" else st.layers),
+                               free_memory_mb=e.gpu.free_memory_mb,
                                price_per_hour=e.gpu_class.price_per_hour))
     return PlanOut(fits=True, idle_gpus=len(eligible), stages=stages, hourly_rate=plan.hourly_rate, machines=plan.machines,
                    num_layers=base.num_layers)
 
 
+FOUR_BIT_FAMILIES = ("llama",)  # BloomBee's 4-bit weight path is implemented for Llama-family blocks only
+
+
+def check_weight_bits(base: BaseModelRow, weight_bits: int) -> None:
+    if weight_bits == 4 and base.family not in FOUR_BIT_FAMILIES:
+        raise HTTPException(422, f"4-bit base weights are not available for {base.family} models yet")
+
+
 @router.get("/plans", response_model=PlanOut)
 def preview_plan(request: Request, base_model_id: int, requested_gpus: int | None = None, trusted_only: bool = False,
+                 weight_bits: int = 16, method: str = "sft",
                  _: User = Depends(current_user), session: Session = Depends(get_session)):
     """What a run would get right now (read-only; nothing is leased)."""
-    return build_plan(request, session, base_model_id, requested_gpus, trusted_only)
+    if weight_bits not in (16, 4):  # a query string never matches Literal[16, 4], so check by hand
+        raise HTTPException(422, "weight_bits must be 16 or 4")
+    return build_plan(request, session, base_model_id, requested_gpus, trusted_only, weight_bits, method)
 
 
 # --------------------------------------------------------------------------------------------- jobs
@@ -155,7 +193,28 @@ class JobIn(BaseModel):
     seq_len: int = Field(default=128, ge=32, le=512)
     lr: float = Field(default=2e-4, gt=0, le=0.01)
     rank: int = Field(default=8, ge=1, le=64)
+    weight_bits: Literal[16, 4] = 16  # 4 = QLoRA: the frozen base model is kept in 4-bit on the workers
+    method: Literal["sft", "dpo", "diloco"] = "sft"  # sft: LoRA on text; dpo: preference pairs; diloco: full fine-tuning
+    inner_steps: int = Field(default=20, ge=1, le=1000)  # diloco: local steps per replica between synchronizations (H)
+    outer_lr: float = Field(default=0.7, gt=0, le=2)  # diloco: Nesterov outer learning rate (DiLoCo paper: 0.7)
+    outer_momentum: float = Field(default=0.9, ge=0, lt=1)
+    beta: float = Field(default=0.1, gt=0, le=5)  # DPO strength (how far the policy may move from the reference)
+    init_model_id: int | None = None  # continue from one of your fine-tuned models (e.g. DPO on top of an SFT model)
     name: str = Field(default="", max_length=80)
+
+
+def init_adapter(session: Session, user: User, base: BaseModelRow, model_id: int | None) -> str:
+    """The adapter directory of the user's fine-tuned model to continue from ("" = start fresh)."""
+    if model_id is None:
+        return ""
+    m = session.get(FineTunedModel, model_id)
+    if m is None or m.owner_id != user.id:
+        raise HTTPException(404, "Model to continue from not found")
+    if m.base_model_id != base.id:
+        raise HTTPException(422, "That model was trained from a different base model")
+    if not m.adapter_path or not (Path(m.adapter_path) / "adapter_config.json").exists():
+        raise HTTPException(422, "That model has no stored adapter to continue from")
+    return m.adapter_path
 
 
 class LeaseOut(BaseModel):
@@ -220,10 +279,26 @@ async def create_job(body: JobIn, request: Request, user: User = Depends(current
         raise HTTPException(404, "Base model not found")
     if body.requested_gpus is not None and body.requested_gpus > base.num_layers:
         raise HTTPException(422, f"requested_gpus cannot exceed the model's {base.num_layers} layers")
+    check_weight_bits(base, body.weight_bits)
     dataset = visible_dataset(session, body.dataset_id, user)
+    want = "preference" if body.method == "dpo" else "text"  # sft and diloco train on text
+    if (dataset.format or "text") != want:
+        raise HTTPException(422, "DPO needs a preference dataset (prompt, chosen, rejected per line)" if body.method == "dpo"
+                            else "Supervised fine-tuning needs a text dataset ({\"text\": ...} per line); use DPO for preference pairs")
+    if body.method == "diloco":
+        if body.weight_bits != 16:
+            raise HTTPException(422, "Full fine-tuning trains every weight: 4-bit base weights are only for LoRA (QLoRA)")
+        if body.init_model_id is not None:
+            raise HTTPException(422, "Full fine-tuning starts from a base model")
+        if body.lr > 1e-3:
+            raise HTTPException(422, "lr is too high for full fine-tuning (use about 1e-5 to 1e-4)")
+    start = init_adapter(session, user, base, body.init_model_id)
     config = {"dataset_id": dataset.id, "dataset_path": dataset.path, "heldout_path": dataset.heldout_path, "steps": body.steps,
               "batch_size": body.batch_size, "seq_len": body.seq_len, "lr": body.lr, "rank": body.rank,
-              "model_name": body.name.strip() or f"{base.name} fine-tuned"}
+              "weight_bits": body.weight_bits, "method": body.method, "beta": body.beta, "init_adapter": start,
+              "init_model_id": body.init_model_id, "inner_steps": body.inner_steps, "outer_lr": body.outer_lr,
+              "outer_momentum": body.outer_momentum,
+              "model_name": body.name.strip() or f"{base.name} {({'dpo': 'DPO', 'diloco': 'full fine-tune'}).get(body.method, 'fine-tuned')}"}
     job = Job(owner_id=user.id, kind="train", status="queued", base_model_id=base.id, requested_gpus=body.requested_gpus,
               trusted_only=body.trusted_only, dataset_path=dataset.path, config_json=json.dumps(config))
     session.add(job)
@@ -283,14 +358,21 @@ class ModelOut(BaseModel):
     created_at: str
     scores: dict
     deployed: bool
+    weight_bits: int  # base-weight precision the model was trained with (4 = QLoRA)
+    method: str  # sft | dpo | session (trained through the SDK)
+    parent_model_id: int | None  # the model it continued from, if any
 
 
 def model_out(session: Session, m: FineTunedModel) -> ModelOut:
     base = session.get(BaseModelRow, m.base_model_id)
     live = session.exec(select(Deployment).where(Deployment.finetuned_model_id == m.id,
                                                   Deployment.status.in_(["starting", "running"]))).first()
+    job = session.get(Job, m.job_id) if m.job_id else None
+    cfg = json.loads(job.config_json or "{}") if job else {}
+    method = "session" if job is not None and job.kind == "session" else ("full" if cfg.get("method") == "diloco" else cfg.get("method", "sft"))
     return ModelOut(id=m.id, name=m.name, base_model=base.name, base_model_id=base.id, job_id=m.job_id,
-                    created_at=iso(m.created_at), scores=json.loads(m.scores_json or "{}"), deployed=live is not None)
+                    created_at=iso(m.created_at), scores=json.loads(m.scores_json or "{}"), deployed=live is not None,
+                    weight_bits=int(cfg.get("weight_bits", 16)), method=method, parent_model_id=cfg.get("init_model_id"))
 
 
 @router.get("/models", response_model=list[ModelOut])

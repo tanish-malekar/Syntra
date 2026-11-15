@@ -5,6 +5,7 @@ and somebody else's deployment can never be given the same GPU.
 """
 from __future__ import annotations
 
+import json
 import threading
 from dataclasses import dataclass
 
@@ -33,17 +34,29 @@ class Eligible:
                          price_per_hour=self.gpu_class.price_per_hour, reliability=self.gpu.reliability, machine=machine)
 
 
-def model_spec(base: BaseModel) -> ModelSpec:
-    return ModelSpec(num_layers=base.num_layers, per_layer_memory_mb=base.per_layer_memory_mb)
+def is_diloco(job: Job) -> bool:
+    return json.loads(job.config_json or "{}").get("method") == "diloco"
+
+
+def weight_bits(job: Job) -> int:
+    """16 (float16 base weights) or 4 (4-bit base: QLoRA training, light serving)."""
+    return int(json.loads(job.config_json or "{}").get("weight_bits", 16))
+
+
+def model_spec(base: BaseModel, bits: int = 16, full_ft: bool = False) -> ModelSpec:
+    return ModelSpec(num_layers=base.num_layers, per_layer_memory_mb=base.per_layer_memory_mb, weight_bits=bits, full_ft=full_ft)
 
 
 def eligible_gpus(session: Session, heartbeat_timeout: float, trusted_only: bool = False,
-                  exclude: set[int] | None = None) -> list[Eligible]:
-    """Idle GPUs: fresh heartbeat, no active lease, not used by someone else, trusted tier if requested."""
+                  exclude: set[int] | None = None, need_4bit: bool = False) -> list[Eligible]:
+    """Idle GPUs: fresh heartbeat, no active lease, not used by someone else, trusted tier if requested,
+    and (for 4-bit jobs) an agent whose BloomBee can compress weights."""
     now = utcnow()
     out: list[Eligible] = []
     for gpu in session.exec(select(Gpu)).all():
         if exclude and gpu.id in exclude:
+            continue
+        if need_4bit and not gpu.supports_4bit:
             continue
         if effective_status(gpu, now, heartbeat_timeout) != "idle" or has_active_lease(session, gpu.id):
             continue
@@ -56,8 +69,11 @@ def eligible_gpus(session: Session, heartbeat_timeout: float, trusted_only: bool
 
 def plan_job(session: Session, job: Job, heartbeat_timeout: float) -> Plan | None:
     base = session.get(BaseModel, job.base_model_id)
-    cands = [e.candidate() for e in eligible_gpus(session, heartbeat_timeout, job.trusted_only)]
-    return planner.make_plan(model_spec(base), cands, job.requested_gpus)
+    bits = weight_bits(job)
+    cands = [e.candidate() for e in eligible_gpus(session, heartbeat_timeout, job.trusted_only, need_4bit=bits == 4)]
+    if is_diloco(job):
+        return planner.make_replica_plan(model_spec(base, full_ft=True), cands, job.requested_gpus or 1)
+    return planner.make_plan(model_spec(base, bits), cands, job.requested_gpus)
 
 
 def _lease(session: Session, events: EventService, job: Job, gpu: Gpu, start: int, end: int) -> Lease:
@@ -158,8 +174,13 @@ def lease_replacement(session: Session, events: EventService, job: Job, dead: Le
         base = session.get(BaseModel, job.base_model_id)
         layers = dead.layer_end - dead.layer_start
         # the GPU whose worker just failed is never reused for its own replacement
-        cands = [e.candidate() for e in eligible_gpus(session, heartbeat_timeout, job.trusted_only, exclude={dead.gpu_id})]
-        best = planner.replacement_candidate(model_spec(base), cands, layers)
+        bits = weight_bits(job)
+        cands = [e.candidate() for e in eligible_gpus(session, heartbeat_timeout, job.trusted_only, exclude={dead.gpu_id},
+                                                      need_4bit=bits == 4)]
+        if is_diloco(job):  # a replica holds the whole model; its lease range is only the replica slot
+            best = planner.replacement_candidate(model_spec(base, full_ft=True), cands, base.num_layers)
+        else:
+            best = planner.replacement_candidate(model_spec(base, bits), cands, layers)
         if best is None:
             return None
         gpu = session.get(Gpu, best.gpu_id)
